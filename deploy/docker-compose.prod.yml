@@ -9,10 +9,14 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
+    networks:
+      - rag-network
 
   # FastAPI 앱
   app:
-    build: ..
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     ports:
       - "8000:8000"
     env_file:
