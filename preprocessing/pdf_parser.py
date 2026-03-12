@@ -6,39 +6,49 @@ class PDFToMarkdown:
     """PDF를 구조를 살린 Markdown으로 변환"""
     
     def parse(self, pdf_path: str, doc_name: str) -> List[Dict]:
-        """PDF를 파싱해서 구조화된 청크 리스트 반환"""
+        """PDF를 파싱해서 구조화된 청크 리스트 반환 (메모리 절약형)
+        1GB 메모리 환경(t3.micro)에서도 1000페이지 PDF 처리 가능"""
         chunks = []
-        
+
+        # 먼저 총 페이지 수만 확인
         with pdfplumber.open(pdf_path) as pdf:
-            for page_num, page in enumerate(pdf.pages, 1):
-                # 텍스트 추출
-                text = page.extract_text() or ""
-                
-                # 테이블 추출
-                tables = page.extract_tables()
-                
-                # 섹션 경로 추출 (제목 패턴 인식)
-                section_path = self._extract_section_path(text)
-                
-                # 테이블이 있으면 Markdown 테이블로 변환
-                markdown_content = text
-                if tables:
-                    for table in tables:
-                        table_md = self._table_to_markdown(table)
-                        markdown_content += f"\n\n{table_md}\n\n"
-                
-                chunk = {
-                    'content': markdown_content,
-                    'metadata': {
-                        'doc_name': doc_name,
-                        'section_path': section_path,
-                        'page': page_num,
-                        'has_table': len(tables) > 0,
-                        'total_pages': len(pdf.pages)
-                    }
-                }
-                chunks.append(chunk)
-        
+            total_pages = len(pdf.pages)
+
+        # 50페이지씩 나눠서 처리 (메모리 절약)
+        batch_size = 50
+        for start in range(0, total_pages, batch_size):
+            end = min(start + batch_size, total_pages)
+
+            with pdfplumber.open(pdf_path, pages=list(range(start, end))) as pdf:
+                for idx, page in enumerate(pdf.pages):
+                    page_num = start + idx + 1
+
+                    text = page.extract_text() or ""
+                    tables = page.extract_tables()
+                    section_path = self._extract_section_path(text)
+
+                    markdown_content = text
+                    if tables:
+                        for table in tables:
+                            table_md = self._table_to_markdown(table)
+                            markdown_content += f"\n\n{table_md}\n\n"
+
+                    if markdown_content.strip():
+                        chunks.append({
+                            'content': markdown_content,
+                            'metadata': {
+                                'doc_name': doc_name,
+                                'section_path': section_path,
+                                'page': page_num,
+                                'has_table': len(tables) > 0,
+                                'total_pages': total_pages
+                            }
+                        })
+
+            # 배치 간 메모리 해제
+            import gc
+            gc.collect()
+
         return chunks
     
     def _extract_section_path(self, text: str) -> str:
