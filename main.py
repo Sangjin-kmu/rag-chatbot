@@ -192,6 +192,22 @@ async def reset_index(user: dict = Depends(verify_admin)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/documents")
+async def list_documents(authorization: str = Header(None)):
+    """업로드된 문서 목록"""
+    try:
+        files = []
+        for f in UPLOAD_DIR.iterdir():
+            if f.is_file():
+                files.append({
+                    "filename": f.name,
+                    "size": f.stat().st_size,
+                    "type": f.suffix
+                })
+        return {"documents": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/health")
 async def health():
     """헬스체크"""

@@ -1104,12 +1104,39 @@
         updateQueue();
         if (uploadStatus) uploadStatus.textContent = "완료: " + success + "개 성공" + (fail > 0 ? ", " + fail + "개 실패" : "");
         uploadDocsBtn.disabled = false;
+        loadDocsList();
       });
     }
 
     if (refreshDocsBtn) {
       refreshDocsBtn.addEventListener("click", function() {
-        if (uploadStatus) uploadStatus.textContent = "새로고침 완료";
+        loadDocsList();
+      });
+    }
+
+    function loadDocsList() {
+      var docsList = document.getElementById("docsList");
+      if (!docsList) return;
+      fetch(window.APP_CONFIG.API_BASE + "/documents", {
+        headers: { "Authorization": "Bearer " + authToken }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.documents || data.documents.length === 0) {
+          docsList.innerHTML = '<div style="padding:12px;color:#888;font-size:13px;">업로드된 문서가 없습니다.</div>';
+          return;
+        }
+        docsList.innerHTML = "";
+        data.documents.forEach(function(doc) {
+          var item = document.createElement("div");
+          item.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px;font-size:13px;";
+          var sizeKB = (doc.size / 1024).toFixed(1);
+          item.innerHTML = '<span style="font-weight:500;">' + doc.filename + '</span><span style="color:#888;">' + sizeKB + ' KB</span>';
+          docsList.appendChild(item);
+        });
+      })
+      .catch(function() {
+        docsList.innerHTML = '<div style="padding:12px;color:#e55;font-size:13px;">목록 로딩 실패</div>';
       });
     }
 
@@ -1126,6 +1153,7 @@
         this.classList.add("active");
         var viewEl = document.getElementById(target + "View");
         if (viewEl) viewEl.classList.add("active");
+        if (target === "docs") loadDocsList();
       });
     });
   </script>
