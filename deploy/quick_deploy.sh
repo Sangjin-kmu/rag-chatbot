@@ -22,10 +22,6 @@ if [ ! -f .env.production ]; then
     echo "필수 입력 항목:"
     echo "  - OPENAI_API_KEY"
     echo "  - COHERE_API_KEY"
-    echo "  - QDRANT_URL (Qdrant Cloud)"
-    echo "  - QDRANT_API_KEY"
-    echo "  - ELASTICSEARCH_URL (Elastic Cloud)"
-    echo "  - ELASTICSEARCH_PASSWORD"
     exit 1
 fi
 
@@ -53,12 +49,13 @@ echo -e "${YELLOW}🏥 헬스체크 대기...${NC}"
 sleep 5
 
 for i in {1..30}; do
-    if curl -s http://localhost:8000/health > /dev/null; then
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
         echo -e "${GREEN}✅ 서버가 정상적으로 시작되었습니다!${NC}"
         echo ""
         echo "접속 정보:"
-        echo "  - 헬스체크: http://$(curl -s ifconfig.me):8000/health"
-        echo "  - 챗봇 UI: http://$(curl -s ifconfig.me):8000/static/index.html"
+        PUBLIC_IP=$(curl -s http://checkip.amazonaws.com 2>/dev/null || echo "YOUR_EC2_IP")
+        echo "  - 헬스체크: http://${PUBLIC_IP}:8000/health"
+        echo "  - 챗봇 UI: http://${PUBLIC_IP}:8000/static/index.html"
         echo ""
         echo "로그 확인:"
         echo "  docker compose -f deploy/docker-compose.prod.yml logs -f"
