@@ -51,11 +51,9 @@ def verify_token(authorization: str = Header(None)) -> dict:
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-def verify_admin(user: dict = None) -> dict:
+def verify_admin(authorization: str = Header(None)) -> dict:
     """관리자 권한 검증"""
-    if not user:
-        from fastapi import Depends
-        user = Depends(verify_token)
+    user = verify_token(authorization)
     
     admin_emails = [e.strip() for e in settings.doc_admin_emails.split(",")]
     
