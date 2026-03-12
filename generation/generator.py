@@ -7,7 +7,7 @@ class AnswerGenerator:
     
     def __init__(self):
         genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
     
     def generate(self, query: str, contexts: List[Dict], history: str = "") -> Dict:
         """답변 생성"""
