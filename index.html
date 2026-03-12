@@ -1031,6 +1031,88 @@
       if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send();
     });
 
+    // ===== 문서 업로드 기능 =====
+    var pendingFiles = [];
+    var dropZone = document.getElementById("dropZone");
+    var docFileInput = document.getElementById("docFile");
+    var uploadQueue = document.getElementById("uploadQueue");
+    var uploadDocsBtn = document.getElementById("uploadDocs");
+    var refreshDocsBtn = document.getElementById("refreshDocs");
+    var uploadStatus = document.getElementById("uploadStatus");
+
+    function updateQueue() {
+      if (!uploadQueue) return;
+      if (pendingFiles.length === 0) {
+        uploadQueue.innerHTML = "";
+        if (uploadStatus) uploadStatus.textContent = "업로드 대기 중인 파일이 없어.";
+        return;
+      }
+      uploadQueue.innerHTML = "";
+      pendingFiles.forEach(function(f, i) {
+        var item = document.createElement("div");
+        item.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#f0f4ff;border-radius:6px;margin-bottom:4px;font-size:13px;";
+        item.innerHTML = '<span>' + f.name + ' (' + (f.size/1024).toFixed(1) + 'KB)</span><button style="border:none;background:none;color:red;cursor:pointer;font-size:16px;" data-idx="' + i + '">✕</button>';
+        item.querySelector("button").addEventListener("click", function() {
+          pendingFiles.splice(parseInt(this.dataset.idx), 1);
+          updateQueue();
+        });
+        uploadQueue.appendChild(item);
+      });
+      if (uploadStatus) uploadStatus.textContent = pendingFiles.length + "개 파일 대기 중";
+    }
+
+    function addFiles(files) {
+      for (var i = 0; i < files.length; i++) {
+        pendingFiles.push(files[i]);
+      }
+      updateQueue();
+    }
+
+    if (dropZone) {
+      dropZone.addEventListener("dragover", function(e) { e.preventDefault(); dropZone.style.borderColor = "#3b82f6"; });
+      dropZone.addEventListener("dragleave", function() { dropZone.style.borderColor = ""; });
+      dropZone.addEventListener("drop", function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = "";
+        addFiles(e.dataTransfer.files);
+      });
+    }
+    if (docFileInput) {
+      docFileInput.addEventListener("change", function() { addFiles(this.files); this.value = ""; });
+    }
+
+    if (uploadDocsBtn) {
+      uploadDocsBtn.addEventListener("click", async function() {
+        if (pendingFiles.length === 0) return;
+        uploadDocsBtn.disabled = true;
+        if (uploadStatus) uploadStatus.textContent = "업로드 중...";
+        var success = 0;
+        var fail = 0;
+        for (var i = 0; i < pendingFiles.length; i++) {
+          var formData = new FormData();
+          formData.append("file", pendingFiles[i]);
+          try {
+            var res = await fetch(window.APP_CONFIG.API_BASE + "/upload", {
+              method: "POST",
+              headers: { "Authorization": "Bearer " + authToken },
+              body: formData
+            });
+            if (res.ok) { success++; } else { fail++; }
+          } catch(e) { fail++; }
+        }
+        pendingFiles = [];
+        updateQueue();
+        if (uploadStatus) uploadStatus.textContent = "완료: " + success + "개 성공" + (fail > 0 ? ", " + fail + "개 실패" : "");
+        uploadDocsBtn.disabled = false;
+      });
+    }
+
+    if (refreshDocsBtn) {
+      refreshDocsBtn.addEventListener("click", function() {
+        if (uploadStatus) uploadStatus.textContent = "새로고침 완료";
+      });
+    }
+
     // 탭 전환
     document.querySelectorAll(".navItem").forEach(function(navItem) {
       navItem.addEventListener("click", function(e) {
