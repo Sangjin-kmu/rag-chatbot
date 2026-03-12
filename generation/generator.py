@@ -1,12 +1,13 @@
 from typing import List, Dict
-import openai
+import google.generativeai as genai
 from config import settings
 
 class AnswerGenerator:
-    """근거 기반 답변 생성"""
+    """근거 기반 답변 생성 (Gemini)"""
     
     def __init__(self):
-        openai.api_key = settings.openai_api_key
+        genai.configure(api_key=settings.gemini_api_key)
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
     
     def generate(self, query: str, contexts: List[Dict], history: str = "") -> Dict:
         """답변 생성"""
@@ -24,7 +25,9 @@ class AnswerGenerator:
 4. 답변 끝에 사용한 문서명과 섹션을 [출처: 문서명 - 섹션] 형식으로 표시하세요
 5. 여러 문서를 참고했다면 모두 표시하세요"""
 
-        user_prompt = f"""질문: {query}
+        user_prompt = f"""{system_prompt}
+
+질문: {query}
 
 참고 문서:
 {context_text}
@@ -34,18 +37,9 @@ class AnswerGenerator:
         if history:
             user_prompt = f"이전 대화:\n{history}\n\n{user_prompt}"
         
-        # GPT 호출
-        response = openai.chat.completions.create(
-            model="gpt-4-turbo-preview",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=1000
-        )
-        
-        answer = response.choices[0].message.content
+        # Gemini 호출
+        response = self.model.generate_content(user_prompt)
+        answer = response.text
         
         # 출처 정보 구성
         sources = self._build_sources(contexts)

@@ -868,109 +868,184 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="config.js"></script>
   <script>
-    // 간단한 자동 로그인 및 채팅 기능
     const chat = document.getElementById("chat");
     const input = document.getElementById("q");
     const btn = document.getElementById("send");
-    
-    let testToken = "test-token-" + Date.now();
-    
-    // 페이지 로드 시 자동 로그인
-    window.addEventListener("load", () => {
-      addMessage("bot", "안녕하세요! 국민대학교 학칙에 대해 질문해주세요.");
+    const googleBtnDiv = document.getElementById("googleBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const userText = document.getElementById("userText");
+    const loginHint = document.getElementById("loginHint");
+
+    let authToken = null;
+    let currentUser = null;
+
+    // 구글 로그인 콜백
+    function handleCredentialResponse(response) {
+      fetch(window.APP_CONFIG.API_BASE + "/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: response.credential })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.token) {
+          authToken = data.token;
+          currentUser = data.user;
+          onLoginSuccess();
+        }
+      })
+      .catch(err => console.error("로그인 실패:", err));
+    }
+
+    function onLoginSuccess() {
+      if (googleBtnDiv) googleBtnDiv.style.display = "none";
+      if (logoutBtn) logoutBtn.classList.remove("hidden");
+      if (userText) userText.textContent = currentUser.name || currentUser.email;
+      if (loginHint) loginHint.style.display = "none";
       if (input) input.disabled = false;
       if (btn) btn.disabled = false;
+
+      // 관리자면 문서관리 탭 표시
+      var navDocs = document.getElementById("navDocs");
+      var docsWorkspace = document.getElementById("docsWorkspace");
+      var docsForbidden = document.getElementById("docsForbidden");
+      if (currentUser && currentUser.isDocAdmin) {
+        if (navDocs) navDocs.classList.remove("hidden");
+        if (docsWorkspace) docsWorkspace.classList.remove("hidden");
+        if (docsForbidden) docsForbidden.classList.add("hidden");
+      }
+
+      addMessage("bot", "안녕하세요! 국민대학교 학칙에 대해 질문해주세요.");
+    }
+
+    function logout() {
+      authToken = null;
+      currentUser = null;
+      if (googleBtnDiv) googleBtnDiv.style.display = "block";
+      if (logoutBtn) logoutBtn.classList.add("hidden");
+      if (userText) userText.textContent = "";
+      if (loginHint) loginHint.style.display = "block";
+      if (input) input.disabled = true;
+      if (btn) btn.disabled = true;
+      if (chat) chat.innerHTML = "";
+
+      // 문서관리 탭 숨기기
+      var navDocs = document.getElementById("navDocs");
+      var docsWorkspace = document.getElementById("docsWorkspace");
+      if (navDocs) navDocs.classList.add("hidden");
+      if (docsWorkspace) docsWorkspace.classList.add("hidden");
+    }
+
+    if (logoutBtn) logoutBtn.addEventListener("click", logout);
+
+    // 구글 로그인 버튼 초기화
+    window.addEventListener("load", () => {
+      if (input) input.disabled = true;
+      if (btn) btn.disabled = true;
+
+      if (window.google && window.google.accounts) {
+        initGoogleLogin();
+      } else {
+        // GSI 스크립트 로딩 대기
+        const checkGoogle = setInterval(() => {
+          if (window.google && window.google.accounts) {
+            clearInterval(checkGoogle);
+            initGoogleLogin();
+          }
+        }, 200);
+        setTimeout(() => clearInterval(checkGoogle), 10000);
+      }
     });
-    
-    function addMessage(role, text, sources = null) {
+
+    function initGoogleLogin() {
+      google.accounts.id.initialize({
+        client_id: window.APP_CONFIG.GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+      google.accounts.id.renderButton(
+        googleBtnDiv,
+        { theme: "outline", size: "large", text: "signin_with", locale: "ko" }
+      );
+    }
+
+    function addMessage(role, text, sources) {
       if (!chat) return;
-      
       const msg = document.createElement("div");
-      msg.className = `msg ${role}`;
-      
+      msg.className = "msg " + role;
       const bubble = document.createElement("div");
       bubble.className = "bubble";
       bubble.textContent = text;
-      
       const body = document.createElement("div");
       body.appendChild(bubble);
-      
       if (role === "bot" && sources && sources.length) {
-        const sourcesBox = document.createElement("div");
-        sourcesBox.className = "sources";
-        sourcesBox.innerHTML = "<h3>근거(출처)</h3>";
-        
-        sources.forEach((s, idx) => {
+        const box = document.createElement("div");
+        box.className = "sources";
+        box.innerHTML = "<h3>근거(출처)</h3>";
+        sources.forEach((s, i) => {
           const item = document.createElement("div");
           item.className = "srcItem";
-          item.innerHTML = `
-            <div class="srcIdx">[${idx + 1}]</div>
-            <div>
-              <div class="uriBox">${s.uri || ""}</div>
-              ${s.page ? `<div class="srcMeta">페이지: ${s.page}</div>` : ""}
-              ${s.snippet ? `<blockquote>${s.snippet}</blockquote>` : ""}
-            </div>
-          `;
-          sourcesBox.appendChild(item);
+          item.innerHTML = '<div class="srcIdx">[' + (i+1) + ']</div><div><div class="uriBox">' + (s.uri||"") + '</div>' + (s.page ? '<div class="srcMeta">페이지: '+s.page+'</div>' : "") + (s.snippet ? '<blockquote>'+s.snippet+'</blockquote>' : "") + '</div>';
+          box.appendChild(item);
         });
-        
-        body.appendChild(document.createElement("div")).className = "divider";
-        body.appendChild(sourcesBox);
+        body.appendChild(box);
       }
-      
       msg.appendChild(body);
       chat.appendChild(msg);
       chat.scrollTop = chat.scrollHeight;
     }
-    
+
     async function send() {
       const q = input?.value?.trim();
       if (!q) return;
-      
       input.value = "";
       btn.disabled = true;
-      
       addMessage("user", q);
       addMessage("bot", "답변 생성중...");
-      
       try {
-        const response = await fetch(window.APP_CONFIG.API_BASE + "/", {
+        const res = await fetch(window.APP_CONFIG.API_BASE + "/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + testToken
+            "Authorization": "Bearer " + authToken
           },
           body: JSON.stringify({ message: q, history: "" })
         });
-        
-        const data = await response.json();
-        
-        // 로딩 메시지 제거
+        const data = await res.json();
         chat.removeChild(chat.lastChild);
-        
-        if (response.ok) {
+        if (res.ok) {
           addMessage("bot", data.answer, data.sources);
         } else {
-          addMessage("bot", "오류: " + (data.error || data.detail || "알 수 없는 오류"));
+          addMessage("bot", "오류: " + (data.detail || "알 수 없는 오류"));
         }
-      } catch (error) {
+      } catch (e) {
         chat.removeChild(chat.lastChild);
-        addMessage("bot", "오류: " + error.message);
+        addMessage("bot", "오류: " + e.message);
       } finally {
         btn.disabled = false;
         input.focus();
       }
     }
-    
+
     if (btn) btn.addEventListener("click", send);
-    if (input) {
-      input.addEventListener("keyup", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          if (!e.isComposing) send();
-        }
+    if (input) input.addEventListener("keyup", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) send();
+    });
+
+    // 탭 전환
+    document.querySelectorAll(".navItem").forEach(function(navItem) {
+      navItem.addEventListener("click", function(e) {
+        e.preventDefault();
+        var target = this.getAttribute("href").replace("#", "");
+        // 모든 navItem에서 active 제거
+        document.querySelectorAll(".navItem").forEach(function(n) { n.classList.remove("active"); });
+        // 모든 view 숨기기
+        document.querySelectorAll(".view").forEach(function(v) { v.classList.remove("active"); });
+        // 클릭한 탭 활성화
+        this.classList.add("active");
+        var viewEl = document.getElementById(target + "View");
+        if (viewEl) viewEl.classList.add("active");
       });
-    }
+    });
   </script>
 </body>
 </html>

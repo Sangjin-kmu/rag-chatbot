@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # API Keys
-    openai_api_key: str
+    gemini_api_key: str  # OpenAI 대신 Gemini
     cohere_api_key: str
     google_client_id: str
     

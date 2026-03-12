@@ -1,7 +1,7 @@
 from typing import List, Dict
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-import openai
+import google.generativeai as genai
 import cohere
 import sqlite3
 from pathlib import Path
@@ -25,8 +25,8 @@ class FreeHybridSearch:
         # Cohere 클라이언트
         self.cohere_client = cohere.Client(settings.cohere_api_key)
         
-        # OpenAI 클라이언트
-        openai.api_key = settings.openai_api_key
+        # Gemini 클라이언트 (임베딩용)
+        genai.configure(api_key=settings.gemini_api_key)
         
         self.collection_name = "documents"
     
@@ -37,7 +37,7 @@ class FreeHybridSearch:
             self.qdrant.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
-                    size=1536,  # OpenAI embedding 차원
+                    size=3072,  # Gemini embedding-001 차원
                     distance=Distance.COSINE,
                     hnsw_config={
                         "m": 32,
@@ -114,12 +114,12 @@ class FreeHybridSearch:
         return reranked
     
     def _get_embedding(self, text: str) -> List[float]:
-        """OpenAI 임베딩 생성"""
-        response = openai.embeddings.create(
-            model="text-embedding-3-small",
-            input=text
+        """Gemini 임베딩 생성"""
+        result = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=text
         )
-        return response.data[0].embedding
+        return result['embedding']
     
     def _bm25_search(self, query: str, top_k: int) -> List[Dict]:
         """BM25 검색 (SQLite FTS5)"""
