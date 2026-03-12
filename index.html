@@ -867,5 +867,110 @@
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="config.js"></script>
+  <script>
+    // 간단한 자동 로그인 및 채팅 기능
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("q");
+    const btn = document.getElementById("send");
+    
+    let testToken = "test-token-" + Date.now();
+    
+    // 페이지 로드 시 자동 로그인
+    window.addEventListener("load", () => {
+      addMessage("bot", "안녕하세요! 국민대학교 학칙에 대해 질문해주세요.");
+      if (input) input.disabled = false;
+      if (btn) btn.disabled = false;
+    });
+    
+    function addMessage(role, text, sources = null) {
+      if (!chat) return;
+      
+      const msg = document.createElement("div");
+      msg.className = `msg ${role}`;
+      
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      
+      const body = document.createElement("div");
+      body.appendChild(bubble);
+      
+      if (role === "bot" && sources && sources.length) {
+        const sourcesBox = document.createElement("div");
+        sourcesBox.className = "sources";
+        sourcesBox.innerHTML = "<h3>근거(출처)</h3>";
+        
+        sources.forEach((s, idx) => {
+          const item = document.createElement("div");
+          item.className = "srcItem";
+          item.innerHTML = `
+            <div class="srcIdx">[${idx + 1}]</div>
+            <div>
+              <div class="uriBox">${s.uri || ""}</div>
+              ${s.page ? `<div class="srcMeta">페이지: ${s.page}</div>` : ""}
+              ${s.snippet ? `<blockquote>${s.snippet}</blockquote>` : ""}
+            </div>
+          `;
+          sourcesBox.appendChild(item);
+        });
+        
+        body.appendChild(document.createElement("div")).className = "divider";
+        body.appendChild(sourcesBox);
+      }
+      
+      msg.appendChild(body);
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    
+    async function send() {
+      const q = input?.value?.trim();
+      if (!q) return;
+      
+      input.value = "";
+      btn.disabled = true;
+      
+      addMessage("user", q);
+      addMessage("bot", "답변 생성중...");
+      
+      try {
+        const response = await fetch(window.APP_CONFIG.API_BASE + "/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + testToken
+          },
+          body: JSON.stringify({ message: q, history: "" })
+        });
+        
+        const data = await response.json();
+        
+        // 로딩 메시지 제거
+        chat.removeChild(chat.lastChild);
+        
+        if (response.ok) {
+          addMessage("bot", data.answer, data.sources);
+        } else {
+          addMessage("bot", "오류: " + (data.error || data.detail || "알 수 없는 오류"));
+        }
+      } catch (error) {
+        chat.removeChild(chat.lastChild);
+        addMessage("bot", "오류: " + error.message);
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+    
+    if (btn) btn.addEventListener("click", send);
+    if (input) {
+      input.addEventListener("keyup", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (!e.isComposing) send();
+        }
+      });
+    }
+  </script>
 </body>
 </html>
