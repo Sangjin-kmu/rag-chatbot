@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>KDD (Kookmin Digital Doc)</title>
+  <style>
+    :root{
+      --bg:#f4f7ff;
+      --bg-soft:#f8fbff;
+      --card:#ffffff;
+      --line:#dde7ff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --blue:#2563eb;
+      --blue-dark:#1d4ed8;
+      --success:#16a34a;
+      --danger:#dc2626;
+      --shadow:0 18px 40px rgba(37,99,235,.10);
+      --shadow-soft:0 10px 24px rgba(15,23,42,.07);
+      --r-xl:26px;
+      --r-lg:20px;
+      --r-md:16px;
+    }
+
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      background:
+        radial-gradient(circle at top left, rgba(37,99,235,.10), transparent 22%),
+        linear-gradient(180deg, #f7f9ff 0%, #eff4ff 100%);
+      color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,sans-serif;
+    }
+
+    .shell{
+      min-height:100vh;
+      display:grid;
+      grid-template-columns:260px 1fr;
+    }
+
+    .sidebar{
+      position:sticky;
+      top:0;
+      height:100vh;
+      padding:22px 18px;
+      background:linear-gradient(180deg, #1d4ed8 0%, #2563eb 45%, #1e40af 100%);
+      color:#fff;
+      box-shadow:8px 0 28px rgba(29,78,216,.16);
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:6px 6px 16px;
+      border-bottom:1px solid rgba(255,255,255,.16);
+    }
+    .brandIcon{
+      width:46px;
+      height:46px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      background:rgba(255,255,255,.15);
+      font-size:18px;
+      font-weight:900;
+      letter-spacing:.02em;
+    }
+    .brandText strong{
+      display:block;
+      font-size:20px;
+      line-height:1.05;
+    }
+    .brandText span{
+      display:block;
+      margin-top:4px;
+      font-size:12px;
+      color:rgba(255,255,255,.78);
+    }
+
+    .navTitle{
+      padding:0 8px;
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      color:rgba(255,255,255,.74);
+    }
+
+    .nav{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .navItem{
+      display:flex;
+      align-items:center;
+      padding:14px 14px;
+      border-radius:16px;
+      text-decoration:none;
+      color:#fff;
+      font-weight:800;
+      border:1px solid transparent;
+      transition:.18s ease;
+      opacity:.95;
+    }
+    .navItem:hover{
+      background:rgba(255,255,255,.10);
+      border-color:rgba(255,255,255,.10);
+      transform:translateX(2px);
+    }
+    .navItem.active{
+      background:#fff;
+      color:var(--blue-dark);
+      box-shadow:0 12px 28px rgba(0,0,0,.16);
+      opacity:1;
+    }
+
+    .sidebarFooter{
+      margin-top:auto;
+      padding:14px;
+      border-radius:18px;
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.14);
+      font-size:12px;
+      line-height:1.6;
+      color:rgba(255,255,255,.84);
+    }
+
+    .main{
+      min-width:0;
+      padding:24px;
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:18px;
+    }
+
+    .pageTitle h1{
+      margin:0;
+      font-size:30px;
+      font-weight:900;
+      letter-spacing:-.03em;
+    }
+    .pageTitle p{
+      margin:8px 0 0 0;
+      font-size:14px;
+      color:var(--muted);
+    }
+
+    .topActions{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      min-height:44px;
+    }
+
+    .userBox{
+      display:none;
+      align-items:center;
+      gap:10px;
+      padding:8px 12px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid var(--line);
+      box-shadow:var(--shadow-soft);
+      font-size:13px;
+      font-weight:800;
+      max-width:280px;
+    }
+    .userAvatar{
+      width:28px;
+      height:28px;
+      border-radius:50%;
+      display:grid;
+      place-items:center;
+      background:linear-gradient(135deg, #dbeafe, #bfdbfe);
+      color:var(--blue-dark);
+      font-weight:900;
+      flex:0 0 auto;
+    }
+    .userText{
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .smallBtn{
+      width:auto;
+      height:40px;
+      padding:0 14px;
+      border-radius:14px;
+      border:0;
+      background:linear-gradient(180deg, var(--blue) 0%, var(--blue-dark) 100%);
+      color:#fff;
+      font-weight:800;
+      font-size:14px;
+      cursor:pointer;
+      box-shadow:0 12px 22px rgba(37,99,235,.20);
+    }
+    .smallBtn.secondary{
+      background:#fff;
+      color:var(--text);
+      border:1px solid var(--line);
+      box-shadow:none;
+    }
+    button:disabled{
+      opacity:.6;
+      cursor:not-allowed;
+    }
+
+    .view{display:none;}
+    .view.active{display:block;}
+
+    .panel{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--r-xl);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+
+    .panelHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:18px 20px;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+    }
+    .panelHead h2{
+      margin:0;
+      font-size:22px;
+    }
+    .panelHead p{
+      margin:6px 0 0 0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .statusPill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      background:#eef6ff;
+      border:1px solid #dbeafe;
+      color:var(--blue-dark);
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .statusDot{
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:var(--success);
+    }
+
+    .chat{
+      padding:18px;
+      height:64vh;
+      overflow:auto;
+      background:linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+    }
+
+    .msg{
+      display:flex;
+      margin:12px 0;
+      align-items:flex-start;
+    }
+    .msg.user{justify-content:flex-end;}
+    .msg.bot{justify-content:flex-start;}
+
+    .bubble{
+      max-width:780px;
+      padding:14px 16px;
+      border-radius:20px;
+      border:1px solid #e5ebfb;
+      background:#fff;
+      box-shadow:var(--shadow-soft);
+      white-space:pre-wrap;
+      line-height:1.55;
+      font-size:14.5px;
+    }
+    .msg.user .bubble{
+      background:linear-gradient(180deg, #dbeafe 0%, #eff6ff 100%);
+      border-color:#bfdbfe;
+    }
+    .bubble.loading{
+      color:var(--muted);
+      background:#f8fafc;
+      font-style:italic;
+    }
+
+    .divider{
+      height:1px;
+      background:#e7eefc;
+      margin:14px 0;
+    }
+
+    .sources h3{
+      margin:0 0 10px 0;
+      font-size:20px;
+    }
+    .srcItem{
+      display:grid;
+      grid-template-columns:50px 1fr;
+      gap:12px;
+      padding:8px 0;
+    }
+    .srcIdx{
+      color:var(--muted);
+      font-weight:900;
+    }
+    .uriBox{
+      background:#f8fafc;
+      border:1px solid #e5ebfb;
+      border-radius:14px;
+      padding:12px;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      font-size:12.5px;
+      overflow:auto;
+    }
+    .srcMeta{
+      margin-top:8px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .link{
+      display:inline-flex;
+      align-items:center;
+      color:var(--blue-dark);
+      text-decoration:none;
+      font-weight:800;
+      margin-top:8px;
+    }
+    .link:hover{text-decoration:underline;}
+    blockquote{
+      margin:10px 0 0 0;
+      padding:10px 12px;
+      border-left:3px solid #bfdbfe;
+      color:#334155;
+      background:#f8fbff;
+      border-radius:12px;
+      white-space:pre-wrap;
+    }
+
+    .bottom{
+      display:flex;
+      gap:12px;
+      padding:16px 18px 18px;
+      border-top:1px solid var(--line);
+      background:#fff;
+    }
+    textarea{
+      flex:1;
+      resize:none;
+      min-height:58px;
+      max-height:160px;
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:16px;
+      font-size:15px;
+      outline:none;
+      background:#f8fbff;
+    }
+    textarea:focus{
+      border-color:#93c5fd;
+      background:#fff;
+      box-shadow:0 0 0 4px rgba(37,99,235,.10);
+    }
+    .sendBtn{
+      width:58px;
+      height:58px;
+      border-radius:18px;
+      border:0;
+      background:linear-gradient(180deg, var(--blue) 0%, var(--blue-dark) 100%);
+      color:#fff;
+      cursor:pointer;
+      font-size:20px;
+      font-weight:900;
+      box-shadow:0 14px 24px rgba(37,99,235,.24);
+    }
+
+    .docsWorkspace{
+      display:grid;
+      grid-template-columns:minmax(320px, 420px) 1fr;
+      gap:18px;
+    }
+
+    .docsAside,
+    .docsMain{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:var(--r-xl);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+
+    .docsAsideInner,
+    .docsMainInner{
+      padding:18px;
+    }
+
+    .dropZone{
+      border:2px dashed #bfd4ff;
+      border-radius:22px;
+      padding:28px 20px;
+      text-align:center;
+      background:linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+      transition:.18s ease;
+      cursor:pointer;
+    }
+    .dropZone.dragover{
+      border-color:var(--blue);
+      background:linear-gradient(180deg, #eff6ff 0%, #e0edff 100%);
+      box-shadow:0 0 0 5px rgba(37,99,235,.08);
+    }
+    .dropZone h3{
+      margin:0;
+      font-size:20px;
+    }
+    .dropZone p{
+      margin:10px 0 0 0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.6;
+    }
+    .dropSub{
+      margin-top:14px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .chooseBtn{
+      margin-top:16px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      height:42px;
+      padding:0 14px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background:#fff;
+      font-size:14px;
+      font-weight:800;
+      cursor:pointer;
+    }
+
+    .queueWrap{
+      margin-top:18px;
+    }
+    .queueTitle{
+      margin:0 0 10px 0;
+      font-size:14px;
+      font-weight:900;
+    }
+
+    .uploadQueue{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      max-height:260px;
+      overflow:auto;
+    }
+
+    .queueItem{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px 14px;
+      border-radius:16px;
+      background:#f8fbff;
+      border:1px solid #e2eafc;
+    }
+    .queueFile{
+      min-width:0;
+    }
+    .queueFileName{
+      font-size:14px;
+      font-weight:800;
+      word-break:break-all;
+    }
+    .queueFileMeta{
+      margin-top:4px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .miniBtn{
+      height:34px;
+      padding:0 10px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#fff;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+
+    .uploadActions{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-top:16px;
+      flex-wrap:wrap;
+    }
+
+    .uploadStatus{
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+
+    .docsMainInner{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+
+    .sectionHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .sectionHeader h3{
+      margin:0;
+      font-size:18px;
+    }
+    .sectionHeader p{
+      margin:4px 0 0 0;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .docsGrid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+
+    .docSection{
+      border:1px solid var(--line);
+      border-radius:22px;
+      background:linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+      overflow:hidden;
+      min-height:480px;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .docSectionHead{
+      padding:16px 18px;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+    }
+    .docSectionHead h4{
+      margin:0;
+      font-size:16px;
+    }
+    .docSectionHead span{
+      display:block;
+      margin-top:4px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .docList{
+      padding:10px 14px 16px;
+      overflow:auto;
+      flex:1;
+    }
+
+    .docItem{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      padding:14px;
+      margin-top:10px;
+      border-radius:18px;
+      background:#fff;
+      border:1px solid #e4ebfb;
+      box-shadow:var(--shadow-soft);
+    }
+    .docItem:first-child{
+      margin-top:0;
+    }
+    .docLeft{
+      min-width:0;
+    }
+    .docName{
+      font-size:14px;
+      font-weight:900;
+      line-height:1.45;
+      word-break:break-all;
+    }
+    .docMeta{
+      margin-top:6px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.5;
+      white-space:pre-wrap;
+    }
+    .docActions{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      flex:0 0 auto;
+    }
+
+    .docActionBtn{
+      height:34px;
+      padding:0 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#fff;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+      text-decoration:none;
+      color:var(--text);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .docActionBtn.danger{
+      color:var(--danger);
+      border-color:#fecaca;
+      background:#fff5f5;
+    }
+
+    .emptyState{
+      padding:18px;
+      border-radius:18px;
+      background:#f8fbff;
+      border:1px dashed var(--line);
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.6;
+    }
+
+    .placeholder{
+      padding:28px;
+    }
+    .placeholderCard{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:26px;
+      box-shadow:var(--shadow);
+      padding:28px;
+    }
+    .placeholderCard h2{
+      margin:0;
+      font-size:26px;
+    }
+    .placeholderCard p{
+      margin:12px 0 0 0;
+      color:var(--muted);
+      line-height:1.7;
+    }
+
+    .hidden{
+      display:none !important;
+    }
+
+    @media (max-width: 1200px){
+      .docsWorkspace{grid-template-columns:1fr;}
+      .docsGrid{grid-template-columns:1fr;}
+    }
+
+    @media (max-width: 960px){
+      .shell{grid-template-columns:1fr;}
+      .sidebar{
+        position:relative;
+        height:auto;
+      }
+      .main{padding:16px;}
+      .topbar{
+        flex-direction:column;
+        align-items:flex-start;
+      }
+      .topActions{
+        width:100%;
+        justify-content:flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brandIcon">KDD</div>
+        <div class="brandText">
+          <strong>KDD</strong>
+          <span>Kookmin Digital Doc</span>
+        </div>
+      </div>
+
+      <div class="navTitle">Workspace</div>
+      <nav class="nav">
+        <a href="#chat" id="navChat" class="navItem active">학칙 질의응답</a>
+        <a href="#docs" id="navDocs" class="navItem hidden">문서관리</a>
+        <a href="#faq" id="navFaq" class="navItem">FAQ관리</a>
+        <a href="#stats" id="navStats" class="navItem">이용통계</a>
+        <a href="#settings" id="navSettings" class="navItem">설정</a>
+      </nav>
+
+      <div class="sidebarFooter">
+        국민대 Google 계정 로그인 후 사용 가능하며,
+        문서관리 메뉴는 Lambda 환경변수에 등록된 관리자 계정에서만 노출된다.
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="pageTitle">
+          <h1>KDD (Kookmin Digital Doc)</h1>
+          <p id="pageSubtitle">국민대 학칙·학사규정을 출처 기반으로 탐색하는 지식형 질의응답 시스템</p>
+        </div>
+
+        <div class="topActions">
+          <div id="userBox" class="userBox">
+            <div class="userAvatar">K</div>
+            <span id="userText" class="userText"></span>
+          </div>
+          <div id="googleBtn"></div>
+          <button id="logoutBtn" class="smallBtn secondary hidden" type="button">로그아웃</button>
+        </div>
+      </div>
+
+      <section id="chatView" class="view active">
+        <div class="panel">
+          <div class="panelHead">
+            <div>
+              <h2>학칙 질의응답</h2>
+              <p id="loginHint">국민대 Google 계정으로 로그인 후 질문할 수 있어.</p>
+            </div>
+            <div class="statusPill">
+              <span class="statusDot"></span>
+              <span>출처 기반 응답</span>
+            </div>
+          </div>
+
+          <div id="chat" class="chat"></div>
+
+          <div class="bottom">
+            <textarea id="q" rows="1" placeholder="질문을 입력하세요..." disabled></textarea>
+            <button id="send" class="sendBtn" title="전송" disabled>➜</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="docsView" class="view">
+        <div id="docsForbidden" class="placeholder hidden">
+          <div class="placeholderCard">
+            <h2>문서관리 접근 권한이 없어</h2>
+            <p>이 페이지는 Lambda 환경변수에 등록된 관리자 계정만 접근할 수 있어.</p>
+          </div>
+        </div>
+
+        <div id="docsWorkspace" class="docsWorkspace hidden">
+          <aside class="docsAside">
+            <div class="docsAsideInner">
+              <div id="dropZone" class="dropZone">
+                <h3>파일을 여기로 드래그해서 업로드</h3>
+                <p>PDF는 지식 문서로 바로 반영되고, Word/HWP 계열은 변환 대기 목록으로 들어가.</p>
+                <div class="dropSub">지원 형식: .pdf .doc .docx .hwp .hwpx</div>
+                <label class="chooseBtn" for="docFile">파일 선택</label>
+                <input id="docFile" type="file" multiple accept=".pdf,.doc,.docx,.hwp,.hwpx" class="hidden" />
+              </div>
+
+              <div class="queueWrap">
+                <div class="queueTitle">업로드 대기 목록</div>
+                <div id="uploadQueue" class="uploadQueue"></div>
+
+                <div class="uploadActions">
+                  <button id="uploadDocs" class="smallBtn" type="button">업로드 시작</button>
+                  <button id="refreshDocs" class="smallBtn secondary" type="button">목록 새로고침</button>
+                </div>
+
+                <div id="uploadStatus" class="uploadStatus">업로드 대기 중인 파일이 없어.</div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="docsMain">
+            <div class="docsMainInner">
+              <div class="sectionHeader">
+                <div>
+                  <h3>문서 현황</h3>
+                  <p>업로드 이후 자동 동기화와 자동 새로고침이 동작해.</p>
+                </div>
+                <div class="statusPill">
+                  <span class="statusDot"></span>
+                  <span>자동 감시 활성화</span>
+                </div>
+              </div>
+
+              <div class="docsGrid">
+                <div class="docSection">
+                  <div class="docSectionHead">
+                    <h4>지식 문서(PDF)</h4>
+                    <span>Knowledge Base에 연결되는 문서 목록</span>
+                  </div>
+                  <div id="docsList" class="docList"></div>
+                </div>
+
+                <div class="docSection">
+                  <div class="docSectionHead">
+                    <h4>변환 대기(raw)</h4>
+                    <span>변환 파이프라인 처리 대상 문서 목록</span>
+                  </div>
+                  <div id="rawList" class="docList"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="faqView" class="view">
+        <div class="placeholder">
+          <div class="placeholderCard">
+            <h2>FAQ관리</h2>
+            <p>이 페이지는 아직 비어 있어. 이후 FAQ 등록/수정/노출 관리 기능을 넣을 수 있어.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="statsView" class="view">
+        <div class="placeholder">
+          <div class="placeholderCard">
+            <h2>이용통계</h2>
+            <p>이 페이지는 아직 비어 있어. 이후 질문 수, 문서별 조회량, 사용자별 사용량 등을 추가할 수 있어.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="settingsView" class="view">
+        <div class="placeholder">
+          <div class="placeholderCard">
+            <h2>설정</h2>
+            <p>이 페이지는 아직 비어 있어. 이후 모델 설정, 라우팅 기준, Knowledge Base 옵션 등을 추가할 수 있어.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

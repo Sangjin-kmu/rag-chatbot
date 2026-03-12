@@ -1,0 +1,26 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# 문서 전처리
+beautifulsoup4==4.12.3
+pdfplumber==0.11.0
+markdown==3.5.2
+
+# 벡터 DB (무료)
+qdrant-client==1.7.3
+
+# AI/ML
+openai==1.10.0
+cohere==4.47
+tiktoken==0.5.2
+
+# 인증
+google-auth==2.27.0
+python-jose[cryptography]==3.3.0
+
+# 유틸리티
+python-dotenv==1.0.0
+httpx==0.26.0

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# 환경 변수
+.env
+.env.production
+
+# 데이터
+data/
+uploads/
+*.db
+*.sqlite
+
+# Docker
+qdrant_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
+
+# 임시 파일
+*.tmp
+*.bak

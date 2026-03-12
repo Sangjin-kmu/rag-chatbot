@@ -1,0 +1,197 @@
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from typing import List, Optional
+import uuid
+import os
+from pathlib import Path
+
+from config import settings
+from search.free_hybrid_search import FreeHybridSearch
+from generation.generator import AnswerGenerator
+from preprocessing.pdf_parser import PDFToMarkdown
+from preprocessing.html_parser import HTMLToMarkdown
+from preprocessing.chunker import SemanticChunker
+from auth import verify_token, verify_admin, create_token, verify_google_token
+
+app = FastAPI(title="KDD RAG System")
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 정적 파일 서빙
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+# 전역 객체
+search_engine = FreeHybridSearch()
+generator = AnswerGenerator()
+chunker = SemanticChunker(
+    chunk_size=settings.chunk_size,
+    overlap=settings.chunk_overlap
+)
+
+# 업로드 디렉토리
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+# 요청/응답 모델
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[str] = ""
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: List[dict]
+
+class AuthRequest(BaseModel):
+    credential: str
+
+class AuthResponse(BaseModel):
+    token: str
+    user: dict
+
+@app.on_event("startup")
+async def startup():
+    """서버 시작 시 초기화"""
+    search_engine.init_collections()
+    print("✅ Qdrant Cloud + SQLite FTS5 초기화 완료 (완전 무료!)")
+
+@app.post("/auth/google", response_model=AuthResponse)
+async def google_login(req: AuthRequest):
+    """Google OAuth 로그인"""
+    # 테스트용 임시 우회
+    user_info = {
+        "email": "22615jin@kookmin.ac.kr",
+        "name": "테스트 사용자"
+    }
+    
+    # JWT 토큰 생성
+    token = create_token(user_info)
+    
+    # 관리자 여부 확인
+    admin_emails = [e.strip() for e in settings.doc_admin_emails.split(",")]
+    is_admin = user_info["email"] in admin_emails
+    
+    return {
+        "token": token,
+        "user": {
+            "email": user_info["email"],
+            "name": user_info["name"],
+            "isDocAdmin": is_admin
+        }
+    }
+
+@app.get("/auth/me")
+async def get_me(user: dict = Depends(verify_token)):
+    """현재 사용자 정보"""
+    admin_emails = [e.strip() for e in settings.doc_admin_emails.split(",")]
+    is_admin = user.get("email") in admin_emails
+    
+    return {
+        "user": {
+            **user,
+            "isDocAdmin": is_admin
+        }
+    }
+
+@app.post("/", response_model=ChatResponse)
+async def chat(req: ChatRequest, user: dict = Depends(verify_token)):
+    """채팅 엔드포인트"""
+    try:
+        # 검색
+        contexts = search_engine.search(
+            query=req.message,
+            top_k=settings.final_context_size
+        )
+        
+        if not contexts:
+            return {
+                "answer": "죄송합니다. 관련된 정보를 찾을 수 없습니다.",
+                "sources": []
+            }
+        
+        # 답변 생성
+        result = generator.generate(
+            query=req.message,
+            contexts=contexts,
+            history=req.history
+        )
+        
+        return result
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    user: dict = Depends(verify_admin)
+):
+    """문서 업로드 및 인덱싱"""
+    try:
+        # 파일 저장
+        file_path = UPLOAD_DIR / file.filename
+        with open(file_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # 파일 타입에 따라 파싱
+        if file.filename.endswith('.pdf'):
+            parser = PDFToMarkdown()
+            chunks = parser.parse(str(file_path), file.filename)
+        elif file.filename.endswith('.html'):
+            parser = HTMLToMarkdown()
+            with open(file_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            chunks = parser.parse(html_content, file.filename)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+        
+        # 청킹
+        all_chunks = []
+        for chunk in chunks:
+            sub_chunks = chunker.chunk(chunk['content'], chunk['metadata'])
+            all_chunks.extend(sub_chunks)
+        
+        # 인덱싱
+        for chunk in all_chunks:
+            chunk_id = str(uuid.uuid4())
+            search_engine.index_chunk(
+                chunk_id=chunk_id,
+                content=chunk['content'],
+                metadata=chunk['metadata']
+            )
+        
+        return {
+            "message": f"Successfully indexed {len(all_chunks)} chunks",
+            "filename": file.filename,
+            "chunks": len(all_chunks)
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/reset")
+async def reset_index(user: dict = Depends(verify_admin)):
+    """인덱스 초기화"""
+    try:
+        search_engine.delete_all()
+        return {"message": "Index reset successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health():
+    """헬스체크"""
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
