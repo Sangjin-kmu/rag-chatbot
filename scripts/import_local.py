@@ -16,8 +16,8 @@ from preprocessing.chunker import SemanticChunker
 from config import settings
 
 UPLOAD_DIR = "uploads"
-BATCH_SIZE = 14       # Gemini 무료: 14, 유료 Tier1: 100
-BATCH_WAIT = 62       # Gemini 무료: 62, 유료 Tier1: 5
+BATCH_SIZE = 100      # Gemini Tier1
+BATCH_WAIT = 5        # Gemini Tier1
 
 def find_pdfs(directory):
     pdfs = []
