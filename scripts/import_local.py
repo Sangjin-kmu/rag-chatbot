@@ -1,4 +1,4 @@
-"""로컬 uploads 폴더의 PDF 파일을 인덱싱하는 스크립트"""
+"""로컬 uploads 폴더의 PDF 파일을 인덱싱하는 스크립트 (빠른 버전)"""
 import os
 import uuid
 import time
@@ -14,7 +14,6 @@ from config import settings
 UPLOAD_DIR = "uploads"
 
 def find_pdfs(directory):
-    """재귀적으로 PDF 파일 찾기"""
     pdfs = []
     for root, dirs, files in os.walk(directory):
         for f in files:
@@ -39,6 +38,8 @@ def main():
     )
 
     total_chunks = 0
+    embed_count = 0  # 분당 임베딩 카운터
+    minute_start = time.time()
 
     for i, filepath in enumerate(pdf_files):
         filename = os.path.basename(filepath)
@@ -46,7 +47,7 @@ def main():
 
         try:
             chunks = pdf_parser.parse(filepath, filename)
-            print(f"  📝 파싱 완료: {len(chunks)}개 섹션")
+            print(f"  📝 파싱: {len(chunks)}개 섹션")
         except Exception as e:
             print(f"  ❌ 파싱 실패: {e}")
             continue
@@ -55,39 +56,46 @@ def main():
         for chunk in chunks:
             sub_chunks = chunker.chunk(chunk["content"], chunk["metadata"])
             all_chunks.extend(sub_chunks)
-        print(f"  🔪 청킹 완료: {len(all_chunks)}개 청크")
+        print(f"  🔪 청킹: {len(all_chunks)}개 청크")
 
         for j, chunk in enumerate(all_chunks):
+            # 분당 14회 제한 관리
+            embed_count += 1
+            if embed_count >= 14:
+                elapsed = time.time() - minute_start
+                if elapsed < 62:
+                    wait = 62 - elapsed
+                    print(f"  ⏳ {wait:.0f}초 대기 ({j+1}/{len(all_chunks)})")
+                    time.sleep(wait)
+                embed_count = 0
+                minute_start = time.time()
+
             chunk_id = str(uuid.uuid4())
-            try:
-                search_engine.index_chunk(
-                    chunk_id=chunk_id,
-                    content=chunk["content"],
-                    metadata=chunk["metadata"]
-                )
-            except Exception as e:
-                print(f"  ⚠️ 청크 {j} 실패: {e}")
-                print("  ⏳ 60초 대기 후 재시도...")
-                time.sleep(60)
+            retry = 0
+            while retry < 3:
                 try:
                     search_engine.index_chunk(
                         chunk_id=chunk_id,
                         content=chunk["content"],
                         metadata=chunk["metadata"]
                     )
-                except Exception as e2:
-                    print(f"  ❌ 재시도 실패: {e2}")
-                    continue
-
-            if (j + 1) % 10 == 0:
-                print(f"  ⏳ rate limit 방지 대기...")
-                time.sleep(65)
+                    break
+                except Exception as e:
+                    retry += 1
+                    if "429" in str(e) or "quota" in str(e).lower():
+                        print(f"  ⚠️ rate limit, 65초 대기...")
+                        time.sleep(65)
+                        embed_count = 0
+                        minute_start = time.time()
+                    else:
+                        print(f"  ❌ 실패: {e}")
+                        break
 
         total_chunks += len(all_chunks)
-        print(f"  ✅ 인덱싱 완료")
+        print(f"  ✅ 완료 (누적 {total_chunks}개)")
 
     search_engine.close()
-    print(f"\n🎉 완료! 총 {len(pdf_files)}개 PDF, {total_chunks}개 청크 인덱싱됨")
+    print(f"\n🎉 완료! {len(pdf_files)}개 PDF, {total_chunks}개 청크")
 
 if __name__ == "__main__":
     main()
