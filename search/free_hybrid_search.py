@@ -96,6 +96,62 @@ class FreeHybridSearch:
             1 if metadata.get('has_table') else 0
         ))
         self.sqlite_conn.commit()
+    def index_chunks_batch(self, chunks: List[Dict]):
+        """청크 배치 인덱싱 (벡터 + BM25) - 대량 처리용"""
+        if not chunks:
+            return
+
+        # 배치 임베딩 생성
+        texts = [c['content'] for c in chunks]
+        embeddings = self._get_embeddings_batch(texts)
+
+        # Qdrant 배치 저장
+        points = []
+        for i, chunk in enumerate(chunks):
+            points.append(
+                PointStruct(
+                    id=chunk['id'],
+                    vector=embeddings[i],
+                    payload={
+                        "content": chunk['content'],
+                        **chunk['metadata']
+                    }
+                )
+            )
+
+        self.qdrant.upsert(
+            collection_name=self.collection_name,
+            points=points
+        )
+
+        # SQLite 배치 저장
+        rows = []
+        for chunk in chunks:
+            rows.append((
+                chunk['id'],
+                chunk['content'],
+                chunk['metadata'].get('doc_name'),
+                chunk['metadata'].get('section_path'),
+                chunk['metadata'].get('page'),
+                1 if chunk['metadata'].get('has_table') else 0
+            ))
+
+        self.sqlite_conn.executemany("""
+            INSERT OR REPLACE INTO documents_fts (id, content, doc_name, section_path, page, has_table)
+            VALUES (?, ?, ?, ?, ?, ?);
+        """, rows)
+        self.sqlite_conn.commit()
+
+    def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """배치 임베딩 생성 (한 번에 최대 100개)"""
+        embeddings = []
+        for text in texts:
+            result = genai.embed_content(
+                model="models/gemini-embedding-001",
+                content=text
+            )
+            embeddings.append(result['embedding'])
+        return embeddings
     
     def search(self, query: str, top_k: int = 6) -> List[Dict]:
         """하이브리드 검색 + 리랭킹"""
