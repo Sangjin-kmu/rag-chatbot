@@ -174,26 +174,35 @@ class FreeHybridSearch:
     
     def _bm25_search(self, query: str, top_k: int) -> List[Dict]:
         """BM25 검색 (SQLite FTS5)"""
-        cursor = self.sqlite_conn.execute("""
-            SELECT 
-                id,
-                content,
-                doc_name,
-                section_path,
-                page,
-                has_table,
-                bm25(documents_fts) as score
-            FROM documents_fts
-            WHERE documents_fts MATCH ?
-            ORDER BY score
-            LIMIT ?;
-        """, (query, top_k))
+        # FTS5 특수문자 이스케이프: 알파벳/숫자/한글/공백만 남기고 제거
+        import re
+        safe_query = re.sub(r'[^\w\s가-힣]', ' ', query).strip()
+        if not safe_query:
+            return []
+
+        try:
+            cursor = self.sqlite_conn.execute("""
+                SELECT 
+                    id,
+                    content,
+                    doc_name,
+                    section_path,
+                    page,
+                    has_table,
+                    bm25(documents_fts) as score
+                FROM documents_fts
+                WHERE documents_fts MATCH ?
+                ORDER BY score
+                LIMIT ?;
+            """, (safe_query, top_k))
+        except Exception:
+            return []
         
         results = []
         for row in cursor.fetchall():
             results.append({
                 'id': row[0],
-                'score': abs(row[6]),  # BM25 점수는 음수
+                'score': abs(row[6]),
                 'content': row[1],
                 'metadata': {
                     'doc_name': row[2],
