@@ -63,6 +63,18 @@ class FreeHybridSearch:
                 tokenize='porter unicode61'
             );
         """)
+
+        # 채팅 로그 테이블
+        self.sqlite_conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                answer TEXT,
+                sources TEXT,
+                user_email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
         self.sqlite_conn.commit()
     
     def index_chunk(self, chunk_id: str, content: str, metadata: Dict):
@@ -352,3 +364,25 @@ class FreeHybridSearch:
     def close(self):
         """연결 종료"""
         self.sqlite_conn.close()
+    def save_chat_log(self, question: str, answer: str, sources: list, user_email: str = ""):
+        """채팅 로그 저장"""
+        import json
+        self.sqlite_conn.execute(
+            "INSERT INTO chat_logs (question, answer, sources, user_email) VALUES (?, ?, ?, ?)",
+            (question, answer, json.dumps(sources, ensure_ascii=False), user_email)
+        )
+        self.sqlite_conn.commit()
+
+    def get_frequent_questions(self, limit: int = 10) -> list:
+        """자주 묻는 질문 조회 (최근 30일, 유사 질문 그룹핑은 LLM에서 처리)"""
+        cursor = self.sqlite_conn.execute("""
+            SELECT question, answer, sources, COUNT(*) as cnt
+            FROM chat_logs
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY question
+            ORDER BY cnt DESC
+            LIMIT ?
+        """, (limit * 3,))  # LLM 그룹핑용으로 넉넉히
+        return [{"question": r[0], "answer": r[1], "sources": r[2], "count": r[3]} for r in cursor.fetchall()]
+
+

@@ -134,9 +134,7 @@ async def get_me(user: dict = Depends(verify_token)):
 async def chat(req: ChatRequest, authorization: str = Header(None)):
     """채팅 엔드포인트"""
     try:
-        # 테스트용: 토큰 검증 우회
         if not authorization or not authorization.startswith("Bearer "):
-            # 토큰 없으면 테스트 사용자로 자동 로그인
             pass
         
         # 검색
@@ -157,6 +155,16 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
             contexts=contexts,
             history=req.history
         )
+        
+        # 채팅 로그 저장
+        try:
+            search_engine.save_chat_log(
+                question=req.message,
+                answer=result.get("answer", ""),
+                sources=result.get("sources", [])
+            )
+        except Exception:
+            pass  # 로그 저장 실패해도 응답은 정상 반환
         
         return result
     
@@ -287,6 +295,83 @@ async def preview_document(filename: str, authorization: str = Header(None)):
 async def health():
     """헬스체크"""
     return {"status": "ok"}
+
+@app.get("/faq")
+async def get_faq():
+    """자주 묻는 질문 (최근 30일 기준, Gemini로 그룹핑)"""
+    import json
+    try:
+        raw = search_engine.get_frequent_questions(limit=10)
+        if not raw:
+            return {"faqs": []}
+
+        # Gemini로 유사 질문 그룹핑 + 대표 질문 선정
+        import google.generativeai as genai
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+
+        lines = "\n".join(f"{i+1}. ({r['count']}회) {r['question']}" for i, r in enumerate(raw))
+        prompt = f"""아래는 대학교 학칙 질의응답 시스템에서 최근 30일간 들어온 질문 목록이야.
+유사한 질문끼리 그룹핑해서 대표 FAQ를 최대 8개 만들어줘.
+
+규칙:
+- 대표 질문은 자연스럽고 간결하게 다듬어줘
+- 카테고리를 붙여줘 (졸업, 수강신청, 장학금, 학적, 기타 등)
+- 원본 번호를 포함해줘
+
+아래 JSON 배열 형식으로만 답해줘:
+[{{"question": "대표 질문", "category": "카테고리", "original_indices": [1,3,5]}}]
+
+질문 목록:
+{lines}"""
+
+        resp = model.generate_content(prompt)
+        text = resp.text.strip()
+        # JSON 추출
+        if "```" in text:
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        groups = json.loads(text)
+
+        # 각 그룹에 대해 가장 좋은 답변 매칭
+        faqs = []
+        for g in groups[:8]:
+            indices = g.get("original_indices", [])
+            # 가장 많이 물어본 원본의 답변 사용
+            best = None
+            for idx in indices:
+                if 1 <= idx <= len(raw):
+                    candidate = raw[idx - 1]
+                    if best is None or candidate["count"] > best["count"]:
+                        best = candidate
+            if best:
+                sources = json.loads(best["sources"]) if isinstance(best["sources"], str) else best["sources"]
+                faqs.append({
+                    "question": g["question"],
+                    "category": g.get("category", "기타"),
+                    "answer": best["answer"],
+                    "sources": sources,
+                    "count": sum(raw[i-1]["count"] for i in indices if 1 <= i <= len(raw))
+                })
+
+        faqs.sort(key=lambda x: x["count"], reverse=True)
+        return {"faqs": faqs}
+
+    except Exception as e:
+        # LLM 실패 시 단순 빈도 기반 폴백
+        import json
+        faqs = []
+        for r in raw[:8]:
+            sources = json.loads(r["sources"]) if isinstance(r["sources"], str) else r["sources"]
+            faqs.append({
+                "question": r["question"],
+                "category": "기타",
+                "answer": r["answer"],
+                "sources": sources,
+                "count": r["count"]
+            })
+        return {"faqs": faqs}
 
 if __name__ == "__main__":
     import uvicorn
