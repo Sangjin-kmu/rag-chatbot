@@ -107,6 +107,22 @@ async def google_login(req: AuthRequest):
     # 관리자 여부 확인
     admin_emails = [e.strip() for e in settings.doc_admin_emails.split(",")]
     is_admin = user_info["email"] in admin_emails
+
+    # 프로필 자동 생성 (최초 로그인 시)
+    try:
+        existing = search_engine.get_user_profile(user_info["email"])
+        if not existing:
+            # 이메일에서 학번 추출 (22615jin@kookmin.ac.kr → 22615jin)
+            student_id = user_info["email"].split("@")[0] if "@" in user_info["email"] else ""
+            search_engine.save_user_profile(
+                email=user_info["email"],
+                name=user_info["name"],
+                student_id=student_id,
+                department="",
+                grade=""
+            )
+    except Exception:
+        pass
     
     return {
         "token": token,

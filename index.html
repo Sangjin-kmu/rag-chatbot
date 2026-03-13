@@ -1257,6 +1257,12 @@
 
       addMessage("bot", "안녕하세요! 국민대학교 학칙에 대해 질문해주세요.");
       loadProfile();
+      // 사이드바에 이름 즉시 표시
+      if (currentUser) {
+        document.getElementById("profileName").textContent = currentUser.name || currentUser.email;
+        document.getElementById("profileAvatar").textContent = (currentUser.name || "K").charAt(0);
+        document.getElementById("profileDetail").textContent = currentUser.email.split("@")[0];
+      }
     }
 
     function logout() {
