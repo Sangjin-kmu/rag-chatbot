@@ -1,0 +1,34 @@
+server:
+  port: 8000
+
+spring:
+  datasource:
+    url: jdbc:sqlite:data/fts.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+
+# 앱 설정
+app:
+  gemini-api-key: ${GEMINI_API_KEY}
+  cohere-api-key: ${COHERE_API_KEY}
+  google-client-id: ${GOOGLE_CLIENT_ID}
+  qdrant-url: ${QDRANT_URL:http://localhost:6333}
+  qdrant-api-key: ${QDRANT_API_KEY:}
+  allowed-domain: ${ALLOWED_DOMAIN:kookmin.ac.kr}
+  doc-admin-emails: ${DOC_ADMIN_EMAILS:}
+  jwt-secret: ${JWT_SECRET}
+  upload-dir: ${UPLOAD_DIR:uploads}
+  chunk-size: ${CHUNK_SIZE:550}
+  chunk-overlap: ${CHUNK_OVERLAP:100}
+  bm25-top-k: ${BM25_TOP_K:20}
+  vector-top-k: ${VECTOR_TOP_K:20}
+  final-context-size: ${FINAL_CONTEXT_SIZE:5}
+  relevance-threshold: ${RELEVANCE_THRESHOLD:0.25}
