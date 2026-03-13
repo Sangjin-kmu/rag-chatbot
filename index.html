@@ -731,6 +731,11 @@
       padding:20px;
       box-shadow:var(--shadow-soft);
       text-align:center;
+      transition:.2s ease;
+    }
+    .statCard:hover{
+      transform:translateY(-3px);
+      box-shadow:0 14px 32px rgba(37,99,235,.14);
     }
     .statLabel{
       font-size:13px;
@@ -743,16 +748,21 @@
       margin-top:6px;
       color:var(--blue-dark);
     }
+    .statCard:nth-child(1) .statValue{color:#2563eb;}
+    .statCard:nth-child(2) .statValue{color:#16a34a;}
+    .statCard:nth-child(3) .statValue{color:#9333ea;}
+    .statCard:nth-child(4) .statValue{color:#ea580c;}
+
     .bar{
       flex:1;
-      background:linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
       border-radius:8px 8px 0 0;
       min-width:0;
       position:relative;
-      transition:height .4s ease;
+      transition:height .4s ease, opacity .15s;
+      cursor:pointer;
     }
     .bar:hover{
-      opacity:.85;
+      opacity:.8;
     }
     .barLabel{
       position:absolute;
@@ -771,7 +781,26 @@
       font-size:11px;
       font-weight:800;
       color:var(--text);
+      white-space:nowrap;
     }
+    .barTooltip{
+      display:none;
+      position:absolute;
+      top:-44px;
+      left:50%;
+      transform:translateX(-50%);
+      background:#1e293b;
+      color:#fff;
+      padding:6px 10px;
+      border-radius:10px;
+      font-size:11px;
+      font-weight:700;
+      white-space:nowrap;
+      z-index:10;
+      pointer-events:none;
+    }
+    .bar:hover .barTooltip{display:block;}
+
     .hbar{
       display:flex;
       align-items:center;
@@ -794,10 +823,10 @@
       background:#f0f4ff;
       border-radius:14px;
       overflow:hidden;
+      position:relative;
     }
     .hbarFill{
       height:100%;
-      background:linear-gradient(90deg, #3b82f6, #2563eb);
       border-radius:14px;
       display:flex;
       align-items:center;
@@ -806,6 +835,90 @@
       font-weight:800;
       color:#fff;
       transition:width .4s ease;
+    }
+    .hbarPct{
+      margin-left:8px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:700;
+      flex:0 0 50px;
+    }
+
+    .sidebarProfile{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:14px;
+      border-radius:18px;
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.14);
+    }
+    .profileAvatar{
+      width:38px;
+      height:38px;
+      border-radius:50%;
+      display:grid;
+      place-items:center;
+      background:rgba(255,255,255,.2);
+      font-weight:900;
+      font-size:16px;
+      flex:0 0 38px;
+    }
+    .profileInfo{
+      min-width:0;
+      flex:1;
+    }
+    .profileName{
+      font-size:14px;
+      font-weight:800;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .profileDetail{
+      font-size:11px;
+      color:rgba(255,255,255,.7);
+      margin-top:2px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .profileEditBtn{
+      border:none;
+      background:rgba(255,255,255,.15);
+      color:#fff;
+      width:30px;
+      height:30px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:14px;
+      flex:0 0 30px;
+    }
+    .profileEditBtn:hover{background:rgba(255,255,255,.25);}
+
+    .formGroup{
+      margin-bottom:14px;
+    }
+    .formGroup label{
+      display:block;
+      font-size:13px;
+      font-weight:700;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+    .formGroup input, .formGroup select{
+      width:100%;
+      height:42px;
+      padding:0 14px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      font-size:14px;
+      outline:none;
+      background:#f8fbff;
+    }
+    .formGroup input:focus, .formGroup select:focus{
+      border-color:#93c5fd;
+      box-shadow:0 0 0 3px rgba(37,99,235,.1);
     }
 
     @media (max-width: 960px){
@@ -858,6 +971,15 @@
         <a href="#stats" id="navStats" class="navItem">이용통계</a>
         <a href="#settings" id="navSettings" class="navItem">설정</a>
       </nav>
+
+      <div id="sidebarProfile" class="sidebarProfile hidden">
+        <div class="profileAvatar" id="profileAvatar">K</div>
+        <div class="profileInfo">
+          <div id="profileName" class="profileName">-</div>
+          <div id="profileDetail" class="profileDetail">-</div>
+        </div>
+        <button id="editProfileBtn" class="profileEditBtn" title="정보 수정">✎</button>
+      </div>
 
       <div class="sidebarFooter">
         국민대 Google 계정 로그인 후 사용 가능하며,
@@ -1050,6 +1172,41 @@
           </div>
         </div>
       </section>
+
+      <!-- 프로필 수정 모달 -->
+      <div id="profileModal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.4);place-items:center;">
+        <div style="background:#fff;border-radius:26px;max-width:440px;width:90%;padding:28px;box-shadow:0 24px 60px rgba(0,0,0,.18);margin:auto;margin-top:15vh;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3 style="margin:0;font-size:20px;">내 정보 수정</h3>
+            <button id="profileModalClose" style="border:none;background:none;font-size:22px;cursor:pointer;color:#64748b;">✕</button>
+          </div>
+          <p style="margin:0 0 16px;font-size:13px;color:#64748b;">입력한 정보는 대화 시 맞춤 답변에 활용돼요.</p>
+          <div class="formGroup">
+            <label>이름</label>
+            <input id="pName" type="text" placeholder="홍길동" />
+          </div>
+          <div class="formGroup">
+            <label>학번</label>
+            <input id="pStudentId" type="text" placeholder="20260000" />
+          </div>
+          <div class="formGroup">
+            <label>학과</label>
+            <input id="pDepartment" type="text" placeholder="소프트웨어학부" />
+          </div>
+          <div class="formGroup">
+            <label>학년</label>
+            <select id="pGrade">
+              <option value="">선택</option>
+              <option value="1학년">1학년</option>
+              <option value="2학년">2학년</option>
+              <option value="3학년">3학년</option>
+              <option value="4학년">4학년</option>
+              <option value="대학원">대학원</option>
+            </select>
+          </div>
+          <button id="saveProfileBtn" class="smallBtn" style="width:100%;margin-top:16px;" type="button">저장</button>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -1104,6 +1261,7 @@
       }
 
       addMessage("bot", "안녕하세요! 국민대학교 학칙에 대해 질문해주세요.");
+      loadProfile();
     }
 
     function logout() {
@@ -1122,6 +1280,7 @@
       var docsWorkspace = document.getElementById("docsWorkspace");
       if (navDocs) navDocs.classList.add("hidden");
       if (docsWorkspace) docsWorkspace.classList.add("hidden");
+      document.getElementById("sidebarProfile").classList.add("hidden");
     }
 
     if (logoutBtn) logoutBtn.addEventListener("click", logout);
@@ -1543,70 +1702,156 @@
     }
 
     // ===== 이용통계 =====
+    var barColors = [
+      'linear-gradient(180deg,#3b82f6,#2563eb)',
+      'linear-gradient(180deg,#16a34a,#15803d)',
+      'linear-gradient(180deg,#f59e0b,#d97706)',
+      'linear-gradient(180deg,#ef4444,#dc2626)',
+      'linear-gradient(180deg,#8b5cf6,#7c3aed)',
+      'linear-gradient(180deg,#06b6d4,#0891b2)',
+      'linear-gradient(180deg,#ec4899,#db2777)',
+    ];
+    var hbarColors = [
+      'linear-gradient(90deg,#3b82f6,#2563eb)',
+      'linear-gradient(90deg,#8b5cf6,#7c3aed)',
+      'linear-gradient(90deg,#16a34a,#15803d)',
+      'linear-gradient(90deg,#f59e0b,#d97706)',
+      'linear-gradient(90deg,#ef4444,#dc2626)',
+      'linear-gradient(90deg,#06b6d4,#0891b2)',
+      'linear-gradient(90deg,#ec4899,#db2777)',
+      'linear-gradient(90deg,#14b8a6,#0d9488)',
+      'linear-gradient(90deg,#f97316,#ea580c)',
+      'linear-gradient(90deg,#6366f1,#4f46e5)',
+    ];
+
     function loadStats() {
       fetch(window.APP_CONFIG.API_BASE + "/stats")
       .then(function(r) { return r.json(); })
       .then(function(s) {
-        // 카드
         document.querySelector("#statTotal .statValue").textContent = s.total_questions.toLocaleString();
         document.querySelector("#statToday .statValue").textContent = s.today_questions.toLocaleString();
         document.querySelector("#statDocs .statValue").textContent = s.total_docs.toLocaleString();
         document.querySelector("#statChunks .statValue").textContent = s.total_chunks.toLocaleString();
 
-        // 일별 바 차트
+        // 일별 바 차트 (다색상 + 퍼센티지 + 툴팁)
         var daily = s.daily_7d || [];
         var maxD = Math.max(1, Math.max.apply(null, daily.map(function(d){return d.count;})));
+        var totalD = daily.reduce(function(a,b){return a+b.count;},0) || 1;
         var chartDaily = document.getElementById("chartDaily");
         chartDaily.innerHTML = "";
-        daily.forEach(function(d) {
+        daily.forEach(function(d, idx) {
           var pct = (d.count / maxD * 100);
+          var share = (d.count / totalD * 100).toFixed(1);
           var bar = document.createElement("div");
           bar.className = "bar";
           bar.style.height = Math.max(pct, 4) + "%";
-          bar.innerHTML = '<span class="barTop">' + d.count + '</span><span class="barLabel">' + d.date.slice(5) + '</span>';
+          bar.style.background = barColors[idx % barColors.length];
+          bar.innerHTML = '<span class="barTooltip">' + d.date + ' · ' + d.count + '건 (' + share + '%)</span>'
+            + '<span class="barTop">' + d.count + '</span>'
+            + '<span class="barLabel">' + d.date.slice(5) + '</span>';
           chartDaily.appendChild(bar);
         });
         if (daily.length === 0) chartDaily.innerHTML = '<div style="color:#94a3b8;font-size:13px;margin:auto;">데이터 없음</div>';
 
-        // 시간대별 바 차트
+        // 시간대별 바 차트 (그라데이션 색상 + 툴팁)
         var hourly = s.hourly || [];
         var maxH = Math.max(1, Math.max.apply(null, hourly.map(function(h){return h.count;})));
+        var totalH = hourly.reduce(function(a,b){return a+b.count;},0) || 1;
         var chartHourly = document.getElementById("chartHourly");
         chartHourly.innerHTML = "";
         hourly.forEach(function(h) {
           var pct = (h.count / maxH * 100);
+          var share = (h.count / totalH * 100).toFixed(1);
           var bar = document.createElement("div");
           bar.className = "bar";
           bar.style.height = Math.max(pct, 2) + "%";
-          if (h.hour % 3 === 0) {
-            bar.innerHTML = '<span class="barLabel">' + h.hour + '시</span>';
-          }
-          if (h.count > 0) {
-            bar.innerHTML = '<span class="barTop">' + h.count + '</span>' + bar.innerHTML;
-          }
+          // 시간대별 색상: 새벽=보라, 오전=파랑, 오후=초록, 저녁=주황
+          var hc = h.hour < 6 ? '#8b5cf6' : h.hour < 12 ? '#3b82f6' : h.hour < 18 ? '#16a34a' : '#f59e0b';
+          bar.style.background = hc;
+          var label = (h.hour % 3 === 0) ? '<span class="barLabel">' + h.hour + '시</span>' : '';
+          bar.innerHTML = '<span class="barTooltip">' + h.hour + '시 · ' + h.count + '건 (' + share + '%)</span>'
+            + (h.count > 0 ? '<span class="barTop">' + h.count + '</span>' : '')
+            + label;
           chartHourly.appendChild(bar);
         });
 
-        // 문서별 수평 바 차트 (최근 30일 가장 많이 참조된 문서)
+        // 문서별 수평 바 차트 (다색상 + 퍼센티지)
         var docs = s.docs_top10 || [];
         var maxC = Math.max(1, docs.length > 0 ? docs[0].count : 1);
+        var totalC = docs.reduce(function(a,b){return a+b.count;},0) || 1;
         var chartDocs = document.getElementById("chartDocs");
         chartDocs.innerHTML = "";
         if (docs.length === 0) {
           chartDocs.innerHTML = '<div style="color:#94a3b8;font-size:13px;">참조 데이터 없음</div>';
           return;
         }
-        docs.forEach(function(d) {
+        docs.forEach(function(d, idx) {
           var pct = (d.count / maxC * 100);
+          var share = (d.count / totalC * 100).toFixed(1);
           var row = document.createElement("div");
           row.className = "hbar";
           row.innerHTML = '<div class="hbarName" title="' + d.doc_name + '">' + d.doc_name + '</div>'
-            + '<div class="hbarTrack"><div class="hbarFill" style="width:' + pct + '%">' + d.count + '회</div></div>';
+            + '<div class="hbarTrack"><div class="hbarFill" style="width:' + pct + '%;background:' + hbarColors[idx % hbarColors.length] + '">' + d.count + '회</div></div>'
+            + '<div class="hbarPct">' + share + '%</div>';
           chartDocs.appendChild(row);
         });
       })
       .catch(function() {});
     }
+
+    // ===== 프로필 =====
+    function loadProfile() {
+      fetch(window.APP_CONFIG.API_BASE + "/profile", {
+        headers: { "Authorization": "Bearer " + authToken }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var p = data.profile || {};
+        var sidebarProfile = document.getElementById("sidebarProfile");
+        if (p.name || p.student_id) {
+          document.getElementById("profileName").textContent = p.name || "-";
+          var detail = [p.student_id, p.department, p.grade].filter(Boolean).join(" · ");
+          document.getElementById("profileDetail").textContent = detail || "-";
+          document.getElementById("profileAvatar").textContent = (p.name || "K").charAt(0);
+          sidebarProfile.classList.remove("hidden");
+        }
+        // 모달 필드 채우기
+        document.getElementById("pName").value = p.name || "";
+        document.getElementById("pStudentId").value = p.student_id || "";
+        document.getElementById("pDepartment").value = p.department || "";
+        document.getElementById("pGrade").value = p.grade || "";
+      })
+      .catch(function() {});
+    }
+
+    document.getElementById("editProfileBtn").addEventListener("click", function() {
+      document.getElementById("profileModal").style.display = "grid";
+    });
+    document.getElementById("profileModalClose").addEventListener("click", function() {
+      document.getElementById("profileModal").style.display = "none";
+    });
+    document.getElementById("profileModal").addEventListener("click", function(e) {
+      if (e.target === this) this.style.display = "none";
+    });
+    document.getElementById("saveProfileBtn").addEventListener("click", function() {
+      var body = {
+        name: document.getElementById("pName").value.trim(),
+        student_id: document.getElementById("pStudentId").value.trim(),
+        department: document.getElementById("pDepartment").value.trim(),
+        grade: document.getElementById("pGrade").value
+      };
+      fetch(window.APP_CONFIG.API_BASE + "/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authToken },
+        body: JSON.stringify(body)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function() {
+        document.getElementById("profileModal").style.display = "none";
+        loadProfile();
+      })
+      .catch(function(e) { alert("저장 실패: " + e.message); });
+    });
 
     // 탭 전환
     document.querySelectorAll(".navItem").forEach(function(navItem) {

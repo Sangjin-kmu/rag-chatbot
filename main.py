@@ -137,6 +137,20 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
         if not authorization or not authorization.startswith("Bearer "):
             pass
         
+        # 사용자 프로필 조회 (컨텍스트용)
+        user_context = ""
+        try:
+            # 테스트용 하드코딩 이메일
+            profile = search_engine.get_user_profile("22615jin@kookmin.ac.kr")
+            if profile and (profile.get("department") or profile.get("grade")):
+                parts = []
+                if profile.get("department"): parts.append(f"학과: {profile['department']}")
+                if profile.get("grade"): parts.append(f"학년: {profile['grade']}")
+                if profile.get("student_id"): parts.append(f"학번: {profile['student_id']}")
+                user_context = "[사용자 정보] " + ", ".join(parts)
+        except Exception:
+            pass
+
         # 검색
         contexts = search_engine.search(
             query=req.message,
@@ -149,11 +163,15 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
                 "sources": []
             }
         
-        # 답변 생성
+        # 답변 생성 (사용자 컨텍스트 포함)
+        history_with_profile = req.history or ""
+        if user_context:
+            history_with_profile = user_context + "\n" + history_with_profile
+
         result = generator.generate(
             query=req.message,
             contexts=contexts,
-            history=req.history
+            history=history_with_profile
         )
         
         # 채팅 로그 저장
@@ -164,7 +182,7 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
                 sources=result.get("sources", [])
             )
         except Exception:
-            pass  # 로그 저장 실패해도 응답은 정상 반환
+            pass
         
         return result
     
@@ -335,6 +353,30 @@ async def preview_document(filename: str, authorization: str = Header(None)):
         filename=filename,
         media_type="application/octet-stream"
     )
+
+@app.get("/profile")
+async def get_profile(authorization: str = Header(None)):
+    """사용자 프로필 조회"""
+    try:
+        profile = search_engine.get_user_profile("22615jin@kookmin.ac.kr")
+        return {"profile": profile}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/profile")
+async def save_profile(data: dict, authorization: str = Header(None)):
+    """사용자 프로필 저장"""
+    try:
+        search_engine.save_user_profile(
+            email="22615jin@kookmin.ac.kr",
+            name=data.get("name", ""),
+            student_id=data.get("student_id", ""),
+            department=data.get("department", ""),
+            grade=data.get("grade", "")
+        )
+        return {"message": "프로필 저장 완료"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health():

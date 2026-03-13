@@ -75,6 +75,18 @@ class FreeHybridSearch:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # 사용자 프로필 테이블
+        self.sqlite_conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                email TEXT PRIMARY KEY,
+                name TEXT,
+                student_id TEXT,
+                department TEXT,
+                grade TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
         self.sqlite_conn.commit()
     
     def index_chunk(self, chunk_id: str, content: str, metadata: Dict):
@@ -364,6 +376,29 @@ class FreeHybridSearch:
     def close(self):
         """연결 종료"""
         self.sqlite_conn.close()
+    def get_user_profile(self, email: str) -> dict:
+        """사용자 프로필 조회"""
+        r = self.sqlite_conn.execute(
+            "SELECT email, name, student_id, department, grade FROM user_profiles WHERE email = ?",
+            (email,)
+        ).fetchone()
+        if r:
+            return {"email": r[0], "name": r[1], "student_id": r[2], "department": r[3], "grade": r[4]}
+        return {}
+
+    def save_user_profile(self, email: str, name: str, student_id: str, department: str, grade: str):
+        """사용자 프로필 저장/업데이트"""
+        self.sqlite_conn.execute("""
+            INSERT INTO user_profiles (email, name, student_id, department, grade, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(email) DO UPDATE SET
+                name=excluded.name, student_id=excluded.student_id,
+                department=excluded.department, grade=excluded.grade,
+                updated_at=CURRENT_TIMESTAMP
+        """, (email, name, student_id, department, grade))
+        self.sqlite_conn.commit()
+
+
     def save_chat_log(self, question: str, answer: str, sources: list, user_email: str = ""):
         """채팅 로그 저장"""
         import json
