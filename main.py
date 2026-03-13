@@ -5,7 +5,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uuid
 import os
+import asyncio
+import threading
 from pathlib import Path
+from datetime import datetime
 
 from config import settings
 from search.free_hybrid_search import FreeHybridSearch
@@ -61,7 +64,33 @@ class AuthResponse(BaseModel):
 async def startup():
     """서버 시작 시 초기화"""
     search_engine.init_collections()
-    print("✅ Qdrant Cloud + SQLite FTS5 초기화 완료 (완전 무료!)")
+    print("✅ Qdrant + SQLite FTS5 초기화 완료")
+
+    # 백그라운드 스케줄러 시작 (매일 새벽 3시 공지 크롤링)
+    def scheduler():
+        import time
+        while True:
+            now = datetime.now()
+            # 다음 새벽 3시까지 대기
+            next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
+            if next_run <= now:
+                from datetime import timedelta
+                next_run += timedelta(days=1)
+            wait_sec = (next_run - now).total_seconds()
+            print(f"⏰ 다음 공지 크롤링: {next_run.strftime('%Y-%m-%d %H:%M')} ({wait_sec/3600:.1f}시간 후)")
+            time.sleep(wait_sec)
+            try:
+                print("🔄 공지사항 자동 크롤링 시작...")
+                asyncio.run(run_crawl())
+            except Exception as e:
+                print(f"❌ 크롤링 실패: {e}")
+
+    async def run_crawl():
+        from scripts.crawl_and_index import crawl_and_index
+        await crawl_and_index(search_engine)
+
+    t = threading.Thread(target=scheduler, daemon=True)
+    t.start()
 
 @app.post("/auth/google", response_model=AuthResponse)
 async def google_login(req: AuthRequest):
@@ -192,21 +221,67 @@ async def reset_index(user: dict = Depends(verify_admin)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/crawl/notices")
+async def trigger_crawl(user: dict = Depends(verify_admin)):
+    """공지사항 수동 크롤링 트리거 (관리자 전용)"""
+    async def run():
+        from scripts.crawl_and_index import crawl_and_index
+        await crawl_and_index(search_engine)
+    asyncio.create_task(run())
+    return {"message": "공지사항 크롤링 시작됨 (백그라운드 실행)"}
+
 @app.get("/documents")
 async def list_documents(authorization: str = Header(None)):
-    """업로드된 문서 목록"""
+    """업로드된 문서 목록 + 인덱싱 청크 수"""
     try:
+        # 인덱싱된 문서 정보 (청크 수 포함)
+        indexed = {d["doc_name"]: d["chunk_count"] for d in search_engine.get_doc_names()}
+
         files = []
         for f in UPLOAD_DIR.iterdir():
             if f.is_file():
                 files.append({
                     "filename": f.name,
                     "size": f.stat().st_size,
-                    "type": f.suffix
+                    "type": f.suffix,
+                    "chunk_count": indexed.get(f.name, 0),
+                    "indexed": f.name in indexed
                 })
         return {"documents": files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/documents/{filename}")
+async def delete_document(filename: str, user: dict = Depends(verify_admin)):
+    """문서 삭제 (파일 + Qdrant + SQLite 모두 삭제)"""
+    try:
+        # 인덱스에서 삭제
+        deleted_chunks = search_engine.delete_by_doc_name(filename)
+
+        # 파일 삭제
+        file_path = UPLOAD_DIR / filename
+        if file_path.exists():
+            file_path.unlink()
+
+        return {
+            "message": f"{filename} 삭제 완료",
+            "deleted_chunks": deleted_chunks
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/documents/{filename}/preview")
+async def preview_document(filename: str, authorization: str = Header(None)):
+    """문서 파일 다운로드/미리보기"""
+    from fastapi.responses import FileResponse
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type="application/octet-stream"
+    )
 
 @app.get("/health")
 async def health():

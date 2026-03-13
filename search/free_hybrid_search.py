@@ -58,6 +58,7 @@ class FreeHybridSearch:
                 section_path UNINDEXED,
                 page UNINDEXED,
                 has_table UNINDEXED,
+                source_url UNINDEXED,
                 tokenize='porter unicode61'
             );
         """)
@@ -85,15 +86,16 @@ class FreeHybridSearch:
         
         # SQLite FTS5에 저장
         self.sqlite_conn.execute("""
-            INSERT OR REPLACE INTO documents_fts (id, content, doc_name, section_path, page, has_table)
-            VALUES (?, ?, ?, ?, ?, ?);
+            INSERT OR REPLACE INTO documents_fts (id, content, doc_name, section_path, page, has_table, source_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
         """, (
             chunk_id,
             content,
             metadata.get('doc_name'),
             metadata.get('section_path'),
             metadata.get('page'),
-            1 if metadata.get('has_table') else 0
+            1 if metadata.get('has_table') else 0,
+            metadata.get('source_url', '')
         ))
         self.sqlite_conn.commit()
     def index_chunks_batch(self, chunks: List[Dict]):
@@ -133,12 +135,13 @@ class FreeHybridSearch:
                 chunk['metadata'].get('doc_name'),
                 chunk['metadata'].get('section_path'),
                 chunk['metadata'].get('page'),
-                1 if chunk['metadata'].get('has_table') else 0
+                1 if chunk['metadata'].get('has_table') else 0,
+                chunk['metadata'].get('source_url', '')
             ))
 
         self.sqlite_conn.executemany("""
-            INSERT OR REPLACE INTO documents_fts (id, content, doc_name, section_path, page, has_table)
-            VALUES (?, ?, ?, ?, ?, ?);
+            INSERT OR REPLACE INTO documents_fts (id, content, doc_name, section_path, page, has_table, source_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
         """, rows)
         self.sqlite_conn.commit()
 
@@ -290,16 +293,59 @@ class FreeHybridSearch:
         
         return reranked
     
+    def delete_by_doc_name(self, doc_name: str) -> int:
+        """특정 문서의 모든 청크 삭제 (Qdrant + SQLite)"""
+        # SQLite에서 해당 문서의 chunk id 목록 조회
+        cursor = self.sqlite_conn.execute(
+            "SELECT id FROM documents_fts WHERE doc_name = ?", (doc_name,)
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+
+        if not ids:
+            return 0
+
+        # Qdrant에서 삭제
+        try:
+            from qdrant_client.models import PointIdsList
+            self.qdrant.delete(
+                collection_name=self.collection_name,
+                points_selector=PointIdsList(points=ids)
+            )
+        except Exception as e:
+            print(f"Qdrant 삭제 오류: {e}")
+
+        # SQLite에서 삭제
+        self.sqlite_conn.execute(
+            "DELETE FROM documents_fts WHERE doc_name = ?", (doc_name,)
+        )
+        self.sqlite_conn.commit()
+
+        return len(ids)
+
+    def get_indexed_sources(self) -> list:
+        """인덱싱된 source_url 목록 (공지 중복 체크용)"""
+        cursor = self.sqlite_conn.execute(
+            "SELECT DISTINCT source_url FROM documents_fts WHERE source_url IS NOT NULL"
+        )
+        return [row[0] for row in cursor.fetchall() if row[0]]
+
+    def get_doc_names(self) -> list:
+        """인덱싱된 문서명 목록 조회"""
+        cursor = self.sqlite_conn.execute(
+            "SELECT DISTINCT doc_name, COUNT(*) as chunk_count FROM documents_fts GROUP BY doc_name"
+        )
+        return [{"doc_name": row[0], "chunk_count": row[1]} for row in cursor.fetchall()]
+
     def delete_all(self):
         """모든 데이터 삭제"""
         try:
             self.qdrant.delete_collection(self.collection_name)
         except:
             pass
-        
+
         self.sqlite_conn.execute("DROP TABLE IF EXISTS documents_fts;")
         self.sqlite_conn.commit()
-        
+
         self.init_collections()
     
     def close(self):

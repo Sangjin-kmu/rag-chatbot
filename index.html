@@ -794,6 +794,7 @@
                 <div class="uploadActions">
                   <button id="uploadDocs" class="smallBtn" type="button">업로드 시작</button>
                   <button id="refreshDocs" class="smallBtn secondary" type="button">목록 새로고침</button>
+                  <button id="crawlNotices" class="smallBtn secondary" type="button">공지 크롤링</button>
                 </div>
 
                 <div id="uploadStatus" class="uploadStatus">업로드 대기 중인 파일이 없어.</div>
@@ -1114,6 +1115,27 @@
       });
     }
 
+    var crawlNoticesBtn = document.getElementById("crawlNotices");
+    if (crawlNoticesBtn) {
+      crawlNoticesBtn.addEventListener("click", function() {
+        crawlNoticesBtn.disabled = true;
+        if (uploadStatus) uploadStatus.textContent = "공지 크롤링 시작 중...";
+        fetch(window.APP_CONFIG.API_BASE + "/crawl/notices", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + authToken }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (uploadStatus) uploadStatus.textContent = d.message || "크롤링 시작됨 (백그라운드 실행 중)";
+          crawlNoticesBtn.disabled = false;
+        })
+        .catch(function(e) {
+          if (uploadStatus) uploadStatus.textContent = "크롤링 요청 실패: " + e.message;
+          crawlNoticesBtn.disabled = false;
+        });
+      });
+    }
+
     function loadDocsList() {
       var docsList = document.getElementById("docsList");
       if (!docsList) return;
@@ -1129,15 +1151,46 @@
         docsList.innerHTML = "";
         data.documents.forEach(function(doc) {
           var item = document.createElement("div");
-          item.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px;font-size:13px;";
+          item.className = "docItem";
           var sizeKB = (doc.size / 1024).toFixed(1);
-          item.innerHTML = '<span style="font-weight:500;">' + doc.filename + '</span><span style="color:#888;">' + sizeKB + ' KB</span>';
+          var indexedBadge = doc.indexed
+            ? '<span style="color:#16a34a;font-weight:700;">✓ 인덱싱됨</span> · ' + doc.chunk_count + '청크'
+            : '<span style="color:#dc2626;">미인덱싱</span>';
+          item.innerHTML =
+            '<div class="docLeft">' +
+              '<div class="docName">' + doc.filename + '</div>' +
+              '<div class="docMeta">' + sizeKB + ' KB · ' + indexedBadge + '</div>' +
+            '</div>' +
+            '<div class="docActions">' +
+              '<a class="docActionBtn" href="' + window.APP_CONFIG.API_BASE + '/documents/' + encodeURIComponent(doc.filename) + '/preview" target="_blank">열기</a>' +
+              '<button class="docActionBtn danger" data-filename="' + doc.filename + '">삭제</button>' +
+            '</div>';
+          item.querySelector(".danger").addEventListener("click", function() {
+            deleteDocument(this.dataset.filename);
+          });
           docsList.appendChild(item);
         });
       })
       .catch(function() {
         docsList.innerHTML = '<div style="padding:12px;color:#e55;font-size:13px;">목록 로딩 실패</div>';
       });
+    }
+
+    function deleteDocument(filename) {
+      if (!confirm(filename + "\n\n이 파일과 인덱싱 데이터를 모두 삭제할까요?")) return;
+      fetch(window.APP_CONFIG.API_BASE + "/documents/" + encodeURIComponent(filename), {
+        method: "DELETE",
+        headers: { "Authorization": "Bearer " + authToken }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.message) {
+          loadDocsList();
+        } else {
+          alert("삭제 실패: " + (d.detail || "알 수 없는 오류"));
+        }
+      })
+      .catch(function(e) { alert("삭제 실패: " + e.message); });
     }
 
     // 탭 전환
