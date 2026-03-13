@@ -1036,7 +1036,7 @@
         </div>
 
         <div class="panel">
-          <div class="panelHead"><div><h2>문서별 청크 수 TOP 10</h2></div></div>
+          <div class="panelHead"><div><h2>최근 많이 참조된 문서 TOP 10</h2></div></div>
           <div id="chartDocs" style="padding:20px;"></div>
         </div>
       </section>
@@ -1515,21 +1515,21 @@
           chartHourly.appendChild(bar);
         });
 
-        // 문서별 수평 바 차트
+        // 문서별 수평 바 차트 (최근 30일 가장 많이 참조된 문서)
         var docs = s.docs_top10 || [];
-        var maxC = Math.max(1, docs.length > 0 ? docs[0].chunks : 1);
+        var maxC = Math.max(1, docs.length > 0 ? docs[0].count : 1);
         var chartDocs = document.getElementById("chartDocs");
         chartDocs.innerHTML = "";
         if (docs.length === 0) {
-          chartDocs.innerHTML = '<div style="color:#94a3b8;font-size:13px;">인덱싱된 문서 없음</div>';
+          chartDocs.innerHTML = '<div style="color:#94a3b8;font-size:13px;">참조 데이터 없음</div>';
           return;
         }
         docs.forEach(function(d) {
-          var pct = (d.chunks / maxC * 100);
+          var pct = (d.count / maxC * 100);
           var row = document.createElement("div");
           row.className = "hbar";
           row.innerHTML = '<div class="hbarName" title="' + d.doc_name + '">' + d.doc_name + '</div>'
-            + '<div class="hbarTrack"><div class="hbarFill" style="width:' + pct + '%">' + d.chunks + '</div></div>';
+            + '<div class="hbarTrack"><div class="hbarFill" style="width:' + pct + '%">' + d.count + '회</div></div>';
           chartDocs.appendChild(row);
         });
       })

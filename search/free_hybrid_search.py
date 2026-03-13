@@ -432,12 +432,23 @@ class FreeHybridSearch:
         stats["total_docs"] = r[0] if r else 0
         stats["total_chunks"] = r[1] if r else 0
 
-        # 문서별 청크 수 TOP 10
-        cursor = self.sqlite_conn.execute("""
-            SELECT doc_name, COUNT(*) as cnt FROM documents_fts
-            GROUP BY doc_name ORDER BY cnt DESC LIMIT 10
-        """)
-        stats["docs_top10"] = [{"doc_name": r[0], "chunks": r[1]} for r in cursor.fetchall()]
+        # 최근 30일 가장 많이 참조된 문서 TOP 10
+        import json as _json
+        cursor = self.sqlite_conn.execute(
+            "SELECT sources FROM chat_logs WHERE created_at >= datetime('now', '-30 days') AND sources IS NOT NULL"
+        )
+        doc_counts = {}
+        for row in cursor.fetchall():
+            try:
+                sources = _json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                for s in sources:
+                    name = s.get("uri") or s.get("doc_name") or ""
+                    if name:
+                        doc_counts[name] = doc_counts.get(name, 0) + 1
+            except Exception:
+                pass
+        sorted_docs = sorted(doc_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        stats["docs_top10"] = [{"doc_name": d[0], "count": d[1]} for d in sorted_docs]
 
         return stats
 
