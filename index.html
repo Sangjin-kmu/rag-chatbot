@@ -969,7 +969,7 @@
         <a href="#docs" id="navDocs" class="navItem hidden">문서관리</a>
         <a href="#faq" id="navFaq" class="navItem">FAQ</a>
         <a href="#stats" id="navStats" class="navItem">이용통계</a>
-        <a href="#settings" id="navSettings" class="navItem">설정</a>
+        <a href="#profile" id="navProfile" class="navItem hidden">내 정보</a>
       </nav>
 
       <div id="sidebarProfile" class="sidebarProfile hidden">
@@ -1164,49 +1164,43 @@
         </div>
       </section>
 
-      <section id="settingsView" class="view">
-        <div class="placeholder">
-          <div class="placeholderCard">
-            <h2>설정</h2>
-            <p>이 페이지는 아직 비어 있어. 이후 모델 설정, 라우팅 기준, Knowledge Base 옵션 등을 추가할 수 있어.</p>
+      <section id="profileView" class="view">
+        <div class="panel">
+          <div class="panelHead">
+            <div>
+              <h2>내 정보</h2>
+              <p>입력한 정보는 대화 시 맞춤 답변에 활용돼요.</p>
+            </div>
+          </div>
+          <div style="padding:24px;max-width:480px;">
+            <div class="formGroup">
+              <label>이름</label>
+              <input id="pName" type="text" placeholder="홍길동" />
+            </div>
+            <div class="formGroup">
+              <label>학번</label>
+              <input id="pStudentId" type="text" placeholder="20260000" />
+            </div>
+            <div class="formGroup">
+              <label>학과</label>
+              <input id="pDepartment" type="text" placeholder="소프트웨어학부" />
+            </div>
+            <div class="formGroup">
+              <label>학년</label>
+              <select id="pGrade">
+                <option value="">선택</option>
+                <option value="1학년">1학년</option>
+                <option value="2학년">2학년</option>
+                <option value="3학년">3학년</option>
+                <option value="4학년">4학년</option>
+                <option value="대학원">대학원</option>
+              </select>
+            </div>
+            <button id="saveProfileBtn" class="smallBtn" style="margin-top:8px;" type="button">저장</button>
+            <span id="profileSaveMsg" style="margin-left:12px;font-size:13px;color:#16a34a;display:none;">✓ 저장됨</span>
           </div>
         </div>
       </section>
-
-      <!-- 프로필 수정 모달 -->
-      <div id="profileModal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.4);place-items:center;">
-        <div style="background:#fff;border-radius:26px;max-width:440px;width:90%;padding:28px;box-shadow:0 24px 60px rgba(0,0,0,.18);margin:auto;margin-top:15vh;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <h3 style="margin:0;font-size:20px;">내 정보 수정</h3>
-            <button id="profileModalClose" style="border:none;background:none;font-size:22px;cursor:pointer;color:#64748b;">✕</button>
-          </div>
-          <p style="margin:0 0 16px;font-size:13px;color:#64748b;">입력한 정보는 대화 시 맞춤 답변에 활용돼요.</p>
-          <div class="formGroup">
-            <label>이름</label>
-            <input id="pName" type="text" placeholder="홍길동" />
-          </div>
-          <div class="formGroup">
-            <label>학번</label>
-            <input id="pStudentId" type="text" placeholder="20260000" />
-          </div>
-          <div class="formGroup">
-            <label>학과</label>
-            <input id="pDepartment" type="text" placeholder="소프트웨어학부" />
-          </div>
-          <div class="formGroup">
-            <label>학년</label>
-            <select id="pGrade">
-              <option value="">선택</option>
-              <option value="1학년">1학년</option>
-              <option value="2학년">2학년</option>
-              <option value="3학년">3학년</option>
-              <option value="4학년">4학년</option>
-              <option value="대학원">대학원</option>
-            </select>
-          </div>
-          <button id="saveProfileBtn" class="smallBtn" style="width:100%;margin-top:16px;" type="button">저장</button>
-        </div>
-      </div>
     </main>
   </div>
 
@@ -1259,6 +1253,7 @@
         if (docsWorkspace) docsWorkspace.classList.remove("hidden");
         if (docsForbidden) docsForbidden.classList.add("hidden");
       }
+      document.getElementById("navProfile").classList.remove("hidden");
 
       addMessage("bot", "안녕하세요! 국민대학교 학칙에 대해 질문해주세요.");
       loadProfile();
@@ -1281,6 +1276,7 @@
       if (navDocs) navDocs.classList.add("hidden");
       if (docsWorkspace) docsWorkspace.classList.add("hidden");
       document.getElementById("sidebarProfile").classList.add("hidden");
+      document.getElementById("navProfile").classList.add("hidden");
     }
 
     if (logoutBtn) logoutBtn.addEventListener("click", logout);
@@ -1813,9 +1809,9 @@
           var detail = [p.student_id, p.department, p.grade].filter(Boolean).join(" · ");
           document.getElementById("profileDetail").textContent = detail || "-";
           document.getElementById("profileAvatar").textContent = (p.name || "K").charAt(0);
-          sidebarProfile.classList.remove("hidden");
         }
-        // 모달 필드 채우기
+        sidebarProfile.classList.remove("hidden");
+        // 폼 필드 채우기
         document.getElementById("pName").value = p.name || "";
         document.getElementById("pStudentId").value = p.student_id || "";
         document.getElementById("pDepartment").value = p.department || "";
@@ -1825,14 +1821,13 @@
     }
 
     document.getElementById("editProfileBtn").addEventListener("click", function() {
-      document.getElementById("profileModal").style.display = "grid";
+      // 내 정보 탭으로 이동
+      document.querySelectorAll(".navItem").forEach(function(n) { n.classList.remove("active"); });
+      document.querySelectorAll(".view").forEach(function(v) { v.classList.remove("active"); });
+      document.getElementById("navProfile").classList.add("active");
+      document.getElementById("profileView").classList.add("active");
     });
-    document.getElementById("profileModalClose").addEventListener("click", function() {
-      document.getElementById("profileModal").style.display = "none";
-    });
-    document.getElementById("profileModal").addEventListener("click", function(e) {
-      if (e.target === this) this.style.display = "none";
-    });
+
     document.getElementById("saveProfileBtn").addEventListener("click", function() {
       var body = {
         name: document.getElementById("pName").value.trim(),
@@ -1847,8 +1842,10 @@
       })
       .then(function(r) { return r.json(); })
       .then(function() {
-        document.getElementById("profileModal").style.display = "none";
         loadProfile();
+        var msg = document.getElementById("profileSaveMsg");
+        msg.style.display = "inline";
+        setTimeout(function() { msg.style.display = "none"; }, 2000);
       })
       .catch(function(e) { alert("저장 실패: " + e.message); });
     });
@@ -1869,6 +1866,7 @@
         if (target === "docs") { loadDocsList(); loadNoticeList(); }
         if (target === "faq") loadFaq();
         if (target === "stats") loadStats();
+        if (target === "profile") loadProfile();
       });
     });
   </script>
