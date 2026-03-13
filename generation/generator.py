@@ -74,18 +74,27 @@ class AnswerGenerator:
         return "\n---\n".join(formatted)
     
     def _build_sources(self, contexts: List[Dict]) -> List[Dict]:
-        """출처 정보 구성"""
+        """출처 정보 구성 — rerank_score 기반 필터링"""
         sources = []
+        seen = set()  # 중복 문서 제거
         
         for ctx in contexts:
             metadata = ctx['metadata']
+            doc_name = metadata.get('doc_name', '알 수 없음')
+            
+            # 같은 문서 중복 출처 방지 (페이지가 다르면 허용)
+            dedup_key = f"{doc_name}_{metadata.get('page', '')}"
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
             
             source = {
-                "uri": metadata.get('doc_name', '알 수 없음'),
+                "uri": doc_name,
                 "page": metadata.get('page'),
                 "section": metadata.get('section_path', ''),
-                "snippet": ctx['content'][:200] + "..." if len(ctx['content']) > 200 else ctx['content'],
-                "has_table": metadata.get('has_table', False)
+                "has_table": metadata.get('has_table', False),
+                "source_url": metadata.get('source_url', ''),
+                "rerank_score": round(ctx.get('rerank_score', 0), 3)
             }
             
             sources.append(source)

@@ -293,7 +293,7 @@ class FreeHybridSearch:
         ]
     
     def _rerank(self, query: str, candidates: List[Dict], top_k: int) -> List[Dict]:
-        """Cohere Rerank로 최종 정렬"""
+        """Cohere Rerank로 최종 정렬 + relevance threshold 필터링"""
         if not candidates:
             return []
         
@@ -304,19 +304,23 @@ class FreeHybridSearch:
             model="rerank-multilingual-v3.0",
             query=query,
             documents=docs,
-            top_n=top_k
+            top_n=min(top_k * 2, len(candidates))  # 넉넉히 가져와서 threshold로 필터
         )
         
-        # 결과 재구성
+        # relevance_score threshold 필터링 (0.25 미만 제거)
+        RELEVANCE_THRESHOLD = 0.25
+        
         reranked = []
         for result in rerank_response.results:
+            if result.relevance_score < RELEVANCE_THRESHOLD:
+                continue
             idx = result.index
             reranked.append({
                 **candidates[idx],
                 'rerank_score': result.relevance_score
             })
         
-        return reranked
+        return reranked[:top_k]
     
     def delete_by_doc_name(self, doc_name: str) -> int:
         """특정 문서의 모든 청크 삭제 (Qdrant + SQLite)"""

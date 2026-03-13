@@ -1327,16 +1327,29 @@
       const body = document.createElement("div");
       body.appendChild(bubble);
       if (role === "bot" && sources && sources.length) {
-        const box = document.createElement("div");
-        box.className = "sources";
-        box.innerHTML = "<h3>근거(출처)</h3>";
-        sources.forEach((s, i) => {
-          const item = document.createElement("div");
-          item.className = "srcItem";
-          item.innerHTML = '<div class="srcIdx">[' + (i+1) + ']</div><div><div class="uriBox">' + (s.uri||"") + '</div>' + (s.page ? '<div class="srcMeta">페이지: '+s.page+'</div>' : "") + (s.snippet ? '<blockquote>'+s.snippet+'</blockquote>' : "") + '</div>';
-          box.appendChild(item);
+        const chips = document.createElement("div");
+        chips.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;";
+        sources.forEach(function(s) {
+          var chip = document.createElement("a");
+          var label = (s.uri || "문서");
+          if (s.page) label += " p." + s.page;
+          if (s.rerank_score) label += " (" + (s.rerank_score * 100).toFixed(0) + "%)";
+          chip.textContent = "📄 " + label;
+          chip.title = s.section ? s.uri + " > " + s.section : s.uri;
+          chip.style.cssText = "display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#eef6ff;border:1px solid #dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;transition:.15s;";
+          chip.addEventListener("mouseenter", function(){ this.style.background="#dbeafe"; });
+          chip.addEventListener("mouseleave", function(){ this.style.background="#eef6ff"; });
+          // 클릭 시 PDF 열기
+          if (s.source_url) {
+            chip.href = s.source_url;
+            chip.target = "_blank";
+          } else {
+            chip.href = window.APP_CONFIG.API_BASE + "/documents/" + encodeURIComponent(s.uri) + "/preview";
+            chip.target = "_blank";
+          }
+          chips.appendChild(chip);
         });
-        body.appendChild(box);
+        body.appendChild(chips);
       }
       msg.appendChild(body);
       chat.appendChild(msg);
@@ -1661,13 +1674,12 @@
       var srcDiv = document.getElementById("faqModalSources");
       srcDiv.innerHTML = "";
       if (faq.sources && faq.sources.length) {
-        var h = '<div class="sources"><h3>근거(출처)</h3>';
-        faq.sources.forEach(function(s, i) {
-          h += '<div class="srcItem"><div class="srcIdx">[' + (i+1) + ']</div><div>'
-            + '<div class="uriBox">' + (s.uri || s.doc_name || "") + '</div>'
-            + (s.page ? '<div class="srcMeta">페이지: ' + s.page + '</div>' : "")
-            + (s.snippet ? '<blockquote>' + s.snippet + '</blockquote>' : "")
-            + '</div></div>';
+        var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">';
+        faq.sources.forEach(function(s) {
+          var label = (s.uri || s.doc_name || "문서");
+          if (s.page) label += " p." + s.page;
+          var href = s.source_url ? s.source_url : (window.APP_CONFIG.API_BASE + "/documents/" + encodeURIComponent(s.uri || s.doc_name || "") + "/preview");
+          h += '<a href="' + href + '" target="_blank" style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#eef6ff;border:1px solid #dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;">📄 ' + label + '</a>';
         });
         h += '</div>';
         srcDiv.innerHTML = h;

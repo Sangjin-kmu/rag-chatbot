@@ -112,11 +112,10 @@ async def google_login(req: AuthRequest):
     try:
         existing = search_engine.get_user_profile(user_info["email"])
         if not existing:
-            student_id = user_info["email"].split("@")[0] if "@" in user_info["email"] else ""
             search_engine.save_user_profile(
                 email=user_info["email"],
                 name=user_info.get("name", ""),
-                student_id=student_id,
+                student_id="",
                 department="",
                 grade=""
             )
@@ -182,8 +181,17 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
         )
         
         if not contexts:
+            # 채팅 로그 저장 (검색 실패도 기록)
+            try:
+                search_engine.save_chat_log(
+                    question=req.message,
+                    answer="관련된 정보를 찾을 수 없습니다.",
+                    sources=[]
+                )
+            except Exception:
+                pass
             return {
-                "answer": "죄송합니다. 관련된 정보를 찾을 수 없습니다.",
+                "answer": "죄송합니다. 관련된 정보를 찾을 수 없습니다. 질문을 다르게 표현해보시거나, 더 구체적으로 질문해주세요.",
                 "sources": []
             }
         
