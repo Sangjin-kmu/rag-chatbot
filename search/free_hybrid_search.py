@@ -1,4 +1,5 @@
 from typing import List, Dict
+import uuid as uuid_lib
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import google.generativeai as genai
@@ -66,25 +67,19 @@ class FreeHybridSearch:
     
     def index_chunk(self, chunk_id: str, content: str, metadata: Dict):
         """청크 인덱싱 (벡터 + BM25)"""
-        # 벡터 임베딩 생성
         embedding = self._get_embedding(content)
-        
-        # Qdrant에 저장
+
         self.qdrant.upsert(
             collection_name=self.collection_name,
             points=[
                 PointStruct(
-                    id=chunk_id,
+                    id=str(uuid_lib.UUID(chunk_id)),  # UUID 형식 보장
                     vector=embedding,
-                    payload={
-                        "content": content,
-                        **metadata
-                    }
+                    payload={"content": content, **metadata}
                 )
             ]
         )
-        
-        # SQLite FTS5에 저장
+
         self.sqlite_conn.execute("""
             INSERT OR REPLACE INTO documents_fts (id, content, doc_name, section_path, page, has_table, source_url)
             VALUES (?, ?, ?, ?, ?, ?, ?);
@@ -112,12 +107,9 @@ class FreeHybridSearch:
         for i, chunk in enumerate(chunks):
             points.append(
                 PointStruct(
-                    id=chunk['id'],
+                    id=str(uuid_lib.UUID(chunk['id'])),  # UUID 형식 보장
                     vector=embeddings[i],
-                    payload={
-                        "content": chunk['content'],
-                        **chunk['metadata']
-                    }
+                    payload={"content": chunk['content'], **chunk['metadata']}
                 )
             )
 
@@ -309,7 +301,7 @@ class FreeHybridSearch:
             from qdrant_client.models import PointIdsList
             self.qdrant.delete(
                 collection_name=self.collection_name,
-                points_selector=PointIdsList(points=ids)
+                points_selector=PointIdsList(points=[str(uuid_lib.UUID(i)) for i in ids])
             )
         except Exception as e:
             print(f"Qdrant 삭제 오류: {e}")
