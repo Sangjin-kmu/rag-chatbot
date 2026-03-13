@@ -384,5 +384,63 @@ class FreeHybridSearch:
             LIMIT ?
         """, (limit * 3,))  # LLM 그룹핑용으로 넉넉히
         return [{"question": r[0], "answer": r[1], "sources": r[2], "count": r[3]} for r in cursor.fetchall()]
+    def get_stats(self) -> dict:
+        """이용통계 데이터 조회"""
+        stats = {}
+
+        # 총 질문 수
+        r = self.sqlite_conn.execute("SELECT COUNT(*) FROM chat_logs").fetchone()
+        stats["total_questions"] = r[0] if r else 0
+
+        # 오늘 질문 수
+        r = self.sqlite_conn.execute(
+            "SELECT COUNT(*) FROM chat_logs WHERE date(created_at) = date('now')"
+        ).fetchone()
+        stats["today_questions"] = r[0] if r else 0
+
+        # 최근 7일 일별 질문 수
+        cursor = self.sqlite_conn.execute("""
+            SELECT date(created_at) as d, COUNT(*) as cnt
+            FROM chat_logs
+            WHERE created_at >= datetime('now', '-7 days')
+            GROUP BY d ORDER BY d
+        """)
+        stats["daily_7d"] = [{"date": r[0], "count": r[1]} for r in cursor.fetchall()]
+
+        # 최근 30일 주별 질문 수
+        cursor = self.sqlite_conn.execute("""
+            SELECT strftime('%W', created_at) as week, COUNT(*) as cnt
+            FROM chat_logs
+            WHERE created_at >= datetime('now', '-30 days')
+            GROUP BY week ORDER BY week
+        """)
+        stats["weekly_30d"] = [{"week": r[0], "count": r[1]} for r in cursor.fetchall()]
+
+        # 시간대별 질문 분포 (0~23시)
+        cursor = self.sqlite_conn.execute("""
+            SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, COUNT(*) as cnt
+            FROM chat_logs
+            GROUP BY hour ORDER BY hour
+        """)
+        hour_data = {r[0]: r[1] for r in cursor.fetchall()}
+        stats["hourly"] = [{"hour": h, "count": hour_data.get(h, 0)} for h in range(24)]
+
+        # 인덱싱된 문서 수 / 총 청크 수
+        r = self.sqlite_conn.execute(
+            "SELECT COUNT(DISTINCT doc_name), COUNT(*) FROM documents_fts"
+        ).fetchone()
+        stats["total_docs"] = r[0] if r else 0
+        stats["total_chunks"] = r[1] if r else 0
+
+        # 문서별 청크 수 TOP 10
+        cursor = self.sqlite_conn.execute("""
+            SELECT doc_name, COUNT(*) as cnt FROM documents_fts
+            GROUP BY doc_name ORDER BY cnt DESC LIMIT 10
+        """)
+        stats["docs_top10"] = [{"doc_name": r[0], "chunks": r[1]} for r in cursor.fetchall()]
+
+        return stats
+
+
 
 

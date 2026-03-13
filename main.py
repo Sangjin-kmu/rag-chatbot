@@ -296,6 +296,14 @@ async def health():
     """헬스체크"""
     return {"status": "ok"}
 
+@app.get("/stats")
+async def get_stats(authorization: str = Header(None)):
+    """이용통계 데이터"""
+    try:
+        return search_engine.get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/faq")
 async def get_faq():
     """자주 묻는 질문 (최근 30일 기준, Gemini로 그룹핑)"""

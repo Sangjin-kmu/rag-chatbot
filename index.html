@@ -724,6 +724,98 @@
       .faqGrid{grid-template-columns:1fr;}
     }
 
+    .statCard{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:22px;
+      padding:20px;
+      box-shadow:var(--shadow-soft);
+      text-align:center;
+    }
+    .statLabel{
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+    }
+    .statValue{
+      font-size:32px;
+      font-weight:900;
+      margin-top:6px;
+      color:var(--blue-dark);
+    }
+    .bar{
+      flex:1;
+      background:linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      border-radius:8px 8px 0 0;
+      min-width:0;
+      position:relative;
+      transition:height .4s ease;
+    }
+    .bar:hover{
+      opacity:.85;
+    }
+    .barLabel{
+      position:absolute;
+      bottom:-20px;
+      left:50%;
+      transform:translateX(-50%);
+      font-size:10px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .barTop{
+      position:absolute;
+      top:-18px;
+      left:50%;
+      transform:translateX(-50%);
+      font-size:11px;
+      font-weight:800;
+      color:var(--text);
+    }
+    .hbar{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom:10px;
+    }
+    .hbarName{
+      width:200px;
+      font-size:13px;
+      font-weight:700;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      text-align:right;
+      flex:0 0 200px;
+    }
+    .hbarTrack{
+      flex:1;
+      height:28px;
+      background:#f0f4ff;
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .hbarFill{
+      height:100%;
+      background:linear-gradient(90deg, #3b82f6, #2563eb);
+      border-radius:14px;
+      display:flex;
+      align-items:center;
+      padding:0 10px;
+      font-size:12px;
+      font-weight:800;
+      color:#fff;
+      transition:width .4s ease;
+    }
+
+    @media (max-width: 960px){
+      .statCard .statValue{font-size:24px;}
+    }
+    @media (max-width: 768px){
+      #statsView > div:first-child{grid-template-columns:1fr 1fr;}
+      #statsView > div:nth-child(2){grid-template-columns:1fr;}
+    }
+
     @media (max-width: 1200px){
       .docsWorkspace{grid-template-columns:1fr;}
       .docsGrid{grid-template-columns:1fr;}
@@ -913,11 +1005,39 @@
       </section>
 
       <section id="statsView" class="view">
-        <div class="placeholder">
-          <div class="placeholderCard">
-            <h2>이용통계</h2>
-            <p>이 페이지는 아직 비어 있어. 이후 질문 수, 문서별 조회량, 사용자별 사용량 등을 추가할 수 있어.</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+          <div class="statCard" id="statTotal">
+            <div class="statLabel">총 질문 수</div>
+            <div class="statValue">-</div>
           </div>
+          <div class="statCard" id="statToday">
+            <div class="statLabel">오늘 질문</div>
+            <div class="statValue">-</div>
+          </div>
+          <div class="statCard" id="statDocs">
+            <div class="statLabel">인덱싱 문서</div>
+            <div class="statValue">-</div>
+          </div>
+          <div class="statCard" id="statChunks">
+            <div class="statLabel">총 청크 수</div>
+            <div class="statValue">-</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;">
+          <div class="panel" style="overflow:visible;">
+            <div class="panelHead"><div><h2>최근 7일 질문 추이</h2></div></div>
+            <div id="chartDaily" style="padding:20px;height:220px;display:flex;align-items:flex-end;gap:8px;"></div>
+          </div>
+          <div class="panel" style="overflow:visible;">
+            <div class="panelHead"><div><h2>시간대별 질문 분포</h2></div></div>
+            <div id="chartHourly" style="padding:20px;height:220px;display:flex;align-items:flex-end;gap:2px;"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead"><div><h2>문서별 청크 수 TOP 10</h2></div></div>
+          <div id="chartDocs" style="padding:20px;"></div>
         </div>
       </section>
 
@@ -1350,6 +1470,72 @@
       refreshFaqBtn.addEventListener("click", loadFaq);
     }
 
+    // ===== 이용통계 =====
+    function loadStats() {
+      fetch(window.APP_CONFIG.API_BASE + "/stats")
+      .then(function(r) { return r.json(); })
+      .then(function(s) {
+        // 카드
+        document.querySelector("#statTotal .statValue").textContent = s.total_questions.toLocaleString();
+        document.querySelector("#statToday .statValue").textContent = s.today_questions.toLocaleString();
+        document.querySelector("#statDocs .statValue").textContent = s.total_docs.toLocaleString();
+        document.querySelector("#statChunks .statValue").textContent = s.total_chunks.toLocaleString();
+
+        // 일별 바 차트
+        var daily = s.daily_7d || [];
+        var maxD = Math.max(1, Math.max.apply(null, daily.map(function(d){return d.count;})));
+        var chartDaily = document.getElementById("chartDaily");
+        chartDaily.innerHTML = "";
+        daily.forEach(function(d) {
+          var pct = (d.count / maxD * 100);
+          var bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.height = Math.max(pct, 4) + "%";
+          bar.innerHTML = '<span class="barTop">' + d.count + '</span><span class="barLabel">' + d.date.slice(5) + '</span>';
+          chartDaily.appendChild(bar);
+        });
+        if (daily.length === 0) chartDaily.innerHTML = '<div style="color:#94a3b8;font-size:13px;margin:auto;">데이터 없음</div>';
+
+        // 시간대별 바 차트
+        var hourly = s.hourly || [];
+        var maxH = Math.max(1, Math.max.apply(null, hourly.map(function(h){return h.count;})));
+        var chartHourly = document.getElementById("chartHourly");
+        chartHourly.innerHTML = "";
+        hourly.forEach(function(h) {
+          var pct = (h.count / maxH * 100);
+          var bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.height = Math.max(pct, 2) + "%";
+          if (h.hour % 3 === 0) {
+            bar.innerHTML = '<span class="barLabel">' + h.hour + '시</span>';
+          }
+          if (h.count > 0) {
+            bar.innerHTML = '<span class="barTop">' + h.count + '</span>' + bar.innerHTML;
+          }
+          chartHourly.appendChild(bar);
+        });
+
+        // 문서별 수평 바 차트
+        var docs = s.docs_top10 || [];
+        var maxC = Math.max(1, docs.length > 0 ? docs[0].chunks : 1);
+        var chartDocs = document.getElementById("chartDocs");
+        chartDocs.innerHTML = "";
+        if (docs.length === 0) {
+          chartDocs.innerHTML = '<div style="color:#94a3b8;font-size:13px;">인덱싱된 문서 없음</div>';
+          return;
+        }
+        docs.forEach(function(d) {
+          var pct = (d.chunks / maxC * 100);
+          var row = document.createElement("div");
+          row.className = "hbar";
+          row.innerHTML = '<div class="hbarName" title="' + d.doc_name + '">' + d.doc_name + '</div>'
+            + '<div class="hbarTrack"><div class="hbarFill" style="width:' + pct + '%">' + d.chunks + '</div></div>';
+          chartDocs.appendChild(row);
+        });
+      })
+      .catch(function() {});
+    }
+
     // 탭 전환
     document.querySelectorAll(".navItem").forEach(function(navItem) {
       navItem.addEventListener("click", function(e) {
@@ -1365,6 +1551,7 @@
         if (viewEl) viewEl.classList.add("active");
         if (target === "docs") loadDocsList();
         if (target === "faq") loadFaq();
+        if (target === "stats") loadStats();
       });
     });
   </script>
