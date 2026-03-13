@@ -231,12 +231,57 @@ async def reset_index(user: dict = Depends(verify_admin)):
 
 @app.post("/crawl/notices")
 async def trigger_crawl(user: dict = Depends(verify_admin)):
-    """공지사항 수동 크롤링 트리거 (관리자 전용)"""
-    async def run():
+    """공지사항 수동 크롤링 트리거 - SSE 실시간 로그"""
+    from fastapi.responses import StreamingResponse
+    import json as _json
+
+    async def event_stream():
         from scripts.crawl_and_index import crawl_and_index
-        await crawl_and_index(search_engine)
-    asyncio.create_task(run())
-    return {"message": "공지사항 크롤링 시작됨 (백그라운드 실행)"}
+        log_queue = asyncio.Queue()
+
+        async def log_callback(msg: str):
+            await log_queue.put(msg)
+
+        async def run():
+            try:
+                await crawl_and_index(search_engine, log_callback=log_callback)
+            except Exception as e:
+                await log_queue.put(f"❌ 오류: {e}")
+            finally:
+                await log_queue.put("__DONE__")
+
+        asyncio.create_task(run())
+
+        while True:
+            msg = await log_queue.get()
+            if msg == "__DONE__":
+                yield f"data: {_json.dumps({'done': True, 'log': '✅ 크롤링 완료'}, ensure_ascii=False)}\n\n"
+                break
+            yield f"data: {_json.dumps({'done': False, 'log': msg}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.get("/crawl/notices/list")
+async def get_notice_docs(authorization: str = Header(None)):
+    """인덱싱된 공지사항 문서 목록"""
+    try:
+        cursor = search_engine.sqlite_conn.execute("""
+            SELECT doc_name, COUNT(*) as chunk_count, source_url
+            FROM documents_fts
+            WHERE doc_name LIKE '[공지]%' OR doc_name LIKE '[공지첨부]%'
+            GROUP BY doc_name
+            ORDER BY rowid DESC
+        """)
+        notices = []
+        for r in cursor.fetchall():
+            notices.append({
+                "doc_name": r[0],
+                "chunk_count": r[1],
+                "source_url": r[2] or ""
+            })
+        return {"notices": notices}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/documents")
 async def list_documents(authorization: str = Header(None)):

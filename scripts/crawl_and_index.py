@@ -122,12 +122,18 @@ def llm_filter_notices(notices: list) -> list:
         return notices
 
 
-async def crawl_and_index(search_engine=None):
+async def crawl_and_index(search_engine=None, log_callback=None):
     """공지사항 크롤링 + 인덱싱 메인 함수"""
+
+    async def log(msg):
+        print(msg)
+        if log_callback:
+            await log_callback(msg)
+
     try:
         from playwright.async_api import async_playwright
     except ImportError:
-        print("❌ playwright 미설치: pip install playwright && playwright install chromium")
+        await log("❌ playwright 미설치")
         return 0
 
     # search_engine이 없으면 직접 생성
@@ -158,7 +164,7 @@ async def crawl_and_index(search_engine=None):
         page = await context.new_page()
 
         # 1단계: 공지 목록 수집 (최근 1년치만)
-        print("📋 공지 목록 수집 중...")
+        await log("📋 공지 목록 수집 중...")
         await page.goto(BASE_URL, wait_until="networkidle", timeout=30000)
         await page.wait_for_timeout(2000)
 
@@ -219,7 +225,7 @@ async def crawl_and_index(search_engine=None):
             if not page_has_recent and pn > 0:
                 break
 
-        print(f"  → 신규 공지 {len(notices_to_process)}개 처리 예정 (LLM 필터 전)")
+        await log(f"  → 신규 공지 {len(notices_to_process)}개 처리 예정 (LLM 필터 전)")
 
         # LLM 필터: Gemini가 인덱싱 가치 판단
         if notices_to_process:
@@ -227,7 +233,7 @@ async def crawl_and_index(search_engine=None):
 
         # 2단계: 각 공지 상세 크롤링 + 인덱싱
         for i, notice in enumerate(notices_to_process):
-            print(f"\n[{i+1}/{len(notices_to_process)}] {notice['title'][:50]}")
+            await log(f"[{i+1}/{len(notices_to_process)}] {notice['title'][:50]}")
             try:
                 await page.goto(notice["url"], wait_until="networkidle", timeout=30000)
                 await page.wait_for_timeout(WAIT_MS)
@@ -254,7 +260,7 @@ async def crawl_and_index(search_engine=None):
                     batch = [{"id": str(uuid.uuid4()), **c} for c in chunks]
                     search_engine.index_chunks_batch(batch)
                     total_indexed += len(batch)
-                    print(f"  📝 본문 {len(batch)}청크 인덱싱")
+                    await log(f"  📝 {notice['title'][:40]} → 본문 {len(batch)}청크 DB저장 완료")
 
                 # 첨부파일 처리
                 if notice["has_attach"]:
@@ -305,13 +311,13 @@ async def crawl_and_index(search_engine=None):
                                 batch = [{"id": str(uuid.uuid4()), **c} for c in attach_chunks]
                                 search_engine.index_chunks_batch(batch)
                                 total_indexed += len(batch)
-                                print(f"  📎 첨부 {name}: {len(batch)}청크 인덱싱")
+                                await log(f"  📎 첨부 {name}: {len(batch)}청크 DB저장 완료")
 
                         except Exception as e:
-                            print(f"  ❌ 첨부파일 처리 실패: {name} - {e}")
+                            await log(f"  ❌ 첨부파일 처리 실패: {name} - {e}")
 
             except Exception as e:
-                print(f"  ❌ 실패: {e}")
+                await log(f"  ❌ 실패: {e}")
 
             await page.wait_for_timeout(500)
 
@@ -320,7 +326,7 @@ async def crawl_and_index(search_engine=None):
     if own_engine:
         search_engine.close()
 
-    print(f"\n✅ 공지 크롤링 완료: {total_indexed}개 청크 인덱싱")
+    await log(f"✅ 공지 크롤링 완료: {total_indexed}개 청크 인덱싱")
     return total_indexed
 
 

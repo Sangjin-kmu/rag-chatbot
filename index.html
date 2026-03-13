@@ -962,10 +962,11 @@
 
                 <div class="docSection">
                   <div class="docSectionHead">
-                    <h4>변환 대기(raw)</h4>
-                    <span>변환 파이프라인 처리 대상 문서 목록</span>
+                    <h4>공지사항 문서</h4>
+                    <span>자동 크롤링으로 수집된 공지사항 목록</span>
                   </div>
-                  <div id="rawList" class="docList"></div>
+                  <div id="crawlLog" style="padding:10px 14px;max-height:180px;overflow:auto;font-size:12px;font-family:monospace;background:#f8fbff;border-bottom:1px solid var(--line);display:none;"></div>
+                  <div id="noticeList" class="docList"></div>
                 </div>
               </div>
             </div>
@@ -1305,20 +1306,91 @@
     if (crawlNoticesBtn) {
       crawlNoticesBtn.addEventListener("click", function() {
         crawlNoticesBtn.disabled = true;
-        if (uploadStatus) uploadStatus.textContent = "공지 크롤링 시작 중...";
+        var logDiv = document.getElementById("crawlLog");
+        logDiv.style.display = "block";
+        logDiv.innerHTML = '<div style="color:#2563eb;">🔄 공지 크롤링 시작...</div>';
+        if (uploadStatus) uploadStatus.textContent = "공지 크롤링 진행 중...";
+
         fetch(window.APP_CONFIG.API_BASE + "/crawl/notices", {
           method: "POST",
           headers: { "Authorization": "Bearer " + authToken }
         })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          if (uploadStatus) uploadStatus.textContent = d.message || "크롤링 시작됨 (백그라운드 실행 중)";
-          crawlNoticesBtn.disabled = false;
+        .then(function(response) {
+          var reader = response.body.getReader();
+          var decoder = new TextDecoder();
+
+          function read() {
+            reader.read().then(function(result) {
+              if (result.done) {
+                crawlNoticesBtn.disabled = false;
+                if (uploadStatus) uploadStatus.textContent = "크롤링 완료";
+                loadNoticeList();
+                return;
+              }
+              var text = decoder.decode(result.value, {stream: true});
+              var lines = text.split("\n");
+              lines.forEach(function(line) {
+                if (line.startsWith("data: ")) {
+                  try {
+                    var data = JSON.parse(line.slice(6));
+                    var entry = document.createElement("div");
+                    entry.style.padding = "2px 0";
+                    entry.style.borderBottom = "1px solid #eef2ff";
+                    if (data.log.includes("❌")) entry.style.color = "#dc2626";
+                    else if (data.log.includes("✅") || data.log.includes("DB저장 완료")) entry.style.color = "#16a34a";
+                    else if (data.log.includes("🤖")) entry.style.color = "#9333ea";
+                    else entry.style.color = "#334155";
+                    entry.textContent = data.log;
+                    logDiv.appendChild(entry);
+                    logDiv.scrollTop = logDiv.scrollHeight;
+
+                    if (data.done) {
+                      crawlNoticesBtn.disabled = false;
+                      if (uploadStatus) uploadStatus.textContent = "크롤링 완료";
+                      loadNoticeList();
+                    }
+                  } catch(e) {}
+                }
+              });
+              read();
+            });
+          }
+          read();
         })
         .catch(function(e) {
           if (uploadStatus) uploadStatus.textContent = "크롤링 요청 실패: " + e.message;
           crawlNoticesBtn.disabled = false;
         });
+      });
+    }
+
+    function loadNoticeList() {
+      var noticeList = document.getElementById("noticeList");
+      if (!noticeList) return;
+      fetch(window.APP_CONFIG.API_BASE + "/crawl/notices/list", {
+        headers: { "Authorization": "Bearer " + authToken }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.notices || data.notices.length === 0) {
+          noticeList.innerHTML = '<div class="emptyState">수집된 공지사항이 없어요. "공지 크롤링" 버튼을 눌러보세요.</div>';
+          return;
+        }
+        noticeList.innerHTML = "";
+        data.notices.forEach(function(n) {
+          var item = document.createElement("div");
+          item.className = "docItem";
+          item.innerHTML =
+            '<div class="docLeft">' +
+              '<div class="docName">' + n.doc_name + '</div>' +
+              '<div class="docMeta">' + n.chunk_count + '청크 · <span style="color:#16a34a;font-weight:700;">✓ 인덱싱됨</span></div>' +
+            '</div>' +
+            (n.source_url ? '<div class="docActions"><a class="docActionBtn" href="' + n.source_url + '" target="_blank">원문</a></div>' : '');
+          noticeList.appendChild(item);
+        });
+      })
+      .catch(function() {
+        noticeList.innerHTML = '<div class="emptyState">공지 목록 로딩 실패</div>';
       });
     }
 
@@ -1549,7 +1621,7 @@
         this.classList.add("active");
         var viewEl = document.getElementById(target + "View");
         if (viewEl) viewEl.classList.add("active");
-        if (target === "docs") loadDocsList();
+        if (target === "docs") { loadDocsList(); loadNoticeList(); }
         if (target === "faq") loadFaq();
         if (target === "stats") loadStats();
       });
