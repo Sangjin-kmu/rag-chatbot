@@ -17,6 +17,7 @@ from preprocessing.pdf_parser import PDFToMarkdown
 from preprocessing.html_parser import HTMLToMarkdown
 from preprocessing.chunker import SemanticChunker
 from auth import verify_token, verify_admin, create_token, verify_google_token
+from jose import jwt
 
 app = FastAPI(title="KDD RAG System")
 
@@ -95,11 +96,10 @@ async def startup():
 @app.post("/auth/google", response_model=AuthResponse)
 async def google_login(req: AuthRequest):
     """Google OAuth 로그인"""
-    # 테스트용 임시 우회
-    user_info = {
-        "email": "22615jin@kookmin.ac.kr",
-        "name": "테스트 사용자"
-    }
+    # 실제 Google 토큰 검증
+    user_info = verify_google_token(req.credential)
+    if not user_info or not user_info.get("email"):
+        raise HTTPException(status_code=401, detail="Google 인증 실패")
     
     # JWT 토큰 생성
     token = create_token(user_info)
@@ -112,11 +112,10 @@ async def google_login(req: AuthRequest):
     try:
         existing = search_engine.get_user_profile(user_info["email"])
         if not existing:
-            # 이메일에서 학번 추출 (22615jin@kookmin.ac.kr → 22615jin)
             student_id = user_info["email"].split("@")[0] if "@" in user_info["email"] else ""
             search_engine.save_user_profile(
                 email=user_info["email"],
-                name=user_info["name"],
+                name=user_info.get("name", ""),
                 student_id=student_id,
                 department="",
                 grade=""
@@ -128,7 +127,7 @@ async def google_login(req: AuthRequest):
         "token": token,
         "user": {
             "email": user_info["email"],
-            "name": user_info["name"],
+            "name": user_info.get("name", ""),
             "isDocAdmin": is_admin
         }
     }
@@ -155,17 +154,26 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
         
         # 사용자 프로필 조회 (컨텍스트용)
         user_context = ""
+        user_email = ""
         try:
-            # 테스트용 하드코딩 이메일
-            profile = search_engine.get_user_profile("22615jin@kookmin.ac.kr")
-            if profile and (profile.get("department") or profile.get("grade")):
-                parts = []
-                if profile.get("department"): parts.append(f"학과: {profile['department']}")
-                if profile.get("grade"): parts.append(f"학년: {profile['grade']}")
-                if profile.get("student_id"): parts.append(f"학번: {profile['student_id']}")
-                user_context = "[사용자 정보] " + ", ".join(parts)
+            if authorization and authorization.startswith("Bearer "):
+                token = authorization.replace("Bearer ", "")
+                payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+                user_email = payload.get("email", "")
         except Exception:
             pass
+
+        if user_email:
+            try:
+                profile = search_engine.get_user_profile(user_email)
+                if profile and (profile.get("department") or profile.get("grade")):
+                    parts = []
+                    if profile.get("department"): parts.append(f"학과: {profile['department']}")
+                    if profile.get("grade"): parts.append(f"학년: {profile['grade']}")
+                    if profile.get("student_id"): parts.append(f"학번: {profile['student_id']}")
+                    user_context = "[사용자 정보] " + ", ".join(parts)
+            except Exception:
+                pass
 
         # 검색
         contexts = search_engine.search(
@@ -374,7 +382,8 @@ async def preview_document(filename: str, authorization: str = Header(None)):
 async def get_profile(authorization: str = Header(None)):
     """사용자 프로필 조회"""
     try:
-        profile = search_engine.get_user_profile("22615jin@kookmin.ac.kr")
+        email = _get_email(authorization)
+        profile = search_engine.get_user_profile(email)
         return {"profile": profile}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -383,8 +392,9 @@ async def get_profile(authorization: str = Header(None)):
 async def save_profile(data: dict, authorization: str = Header(None)):
     """사용자 프로필 저장"""
     try:
+        email = _get_email(authorization)
         search_engine.save_user_profile(
-            email="22615jin@kookmin.ac.kr",
+            email=email,
             name=data.get("name", ""),
             student_id=data.get("student_id", ""),
             department=data.get("department", ""),
@@ -393,6 +403,17 @@ async def save_profile(data: dict, authorization: str = Header(None)):
         return {"message": "프로필 저장 완료"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def _get_email(authorization: str) -> str:
+    """Authorization 헤더에서 이메일 추출"""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "")
+        try:
+            payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+            return payload.get("email", "")
+        except Exception:
+            pass
+    return ""
 
 @app.get("/health")
 async def health():
