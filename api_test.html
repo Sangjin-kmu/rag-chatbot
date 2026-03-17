@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>KDD API Tester</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: #2c3e50; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; }
+  .header-right { display: flex; gap: 10px; align-items: center; }
+  .header-right input { padding: 6px 10px; border: none; border-radius: 4px; font-size: 12px; width: 220px; }
+  .header-right label { font-size: 12px; }
+  .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 14px; font-weight: 700; color: #2c3e50; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #3498db; }
+  .api-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 12px; }
+  .card { background: #fff; border-radius: 8px; border: 1px solid #e0e0e0; overflow: hidden; }
+  .card-header { padding: 10px 14px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f0f0f0; }
+  .badge { padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+  .badge-get { background: #27ae60; }
+  .badge-post { background: #2980b9; }
+  .badge-delete { background: #e74c3c; }
+  .card-header .path { font-size: 13px; font-weight: 600; font-family: monospace; }
+  .card-header .desc { font-size: 11px; color: #888; margin-left: auto; }
+  .card-body { padding: 12px 14px; }
+  .card-body .field { margin-bottom: 8px; }
+  .card-body label { font-size: 11px; color: #666; display: block; margin-bottom: 3px; }
+  .card-body input, .card-body textarea { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: monospace; }
+  .card-body textarea { height: 60px; resize: vertical; }
+  .btn { padding: 7px 16px; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; color: #fff; }
+  .btn-send { background: #3498db; }
+  .btn-send:hover { background: #2980b9; }
+  .card-footer { border-top: 1px solid #f0f0f0; }
+  .response-area { max-height: 250px; overflow-y: auto; padding: 10px 14px; font-size: 11px; font-family: monospace; white-space: pre-wrap; background: #1e1e1e; color: #d4d4d4; display: none; }
+  .response-area.show { display: block; }
+  .status { font-size: 11px; padding: 10px 14px; display: none; }
+  .status.show { display: block; }
+  .status.ok { color: #27ae60; }
+  .status.err { color: #e74c3c; }
+  .jwt-bar { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .jwt-bar label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .jwt-bar input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: monospace; }
+  .base-bar { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .base-bar label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .base-bar input { width: 300px; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>KDD Backend API Tester</h1>
+  <div class="header-right">
+    <label>Spring Boot가 실행 중이어야 합니다 (localhost:8000)</label>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="base-bar">
+    <label>Base URL:</label>
+    <input type="text" id="baseUrl" value="http://localhost:8000" />
+    <label style="margin-left:20px">JWT Token:</label>
+    <input type="text" id="jwtToken" placeholder="로그인 후 자동 설정되거나 직접 입력" style="flex:1" />
+  </div>
+
+  <!-- 인증 -->
+  <div class="section">
+    <div class="section-title">인증 (Auth)</div>
+    <div class="api-cards">
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="path">/auth/google</span>
+          <span class="desc">Google OAuth 로그인</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>1. Google 로그인 버튼 클릭</label>
+            <div id="g_id_onload"
+                 data-client_id="879695241528-9t7rcohthseucdfsg5u259gbnl17340i.apps.googleusercontent.com"
+                 data-callback="handleGoogleCredential"
+                 data-auto_prompt="false">
+            </div>
+            <div class="g_id_signin" data-type="standard" data-size="medium" data-theme="outline" data-text="signin_with"></div>
+          </div>
+          <div class="field">
+            <label>credential (자동 입력됨)</label>
+            <input type="text" id="auth-credential" placeholder="위 버튼으로 로그인하면 자동 입력" />
+          </div>
+          <button class="btn btn-send" onclick="callApi('POST', '/auth/google', {credential: gv('auth-credential')}, 'auth-res', false, function(d){if(d.token){document.getElementById('jwtToken').value=d.token;}})">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="auth-res-status"></div>
+          <div class="response-area" id="auth-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/auth/dev-token</span>
+          <span class="desc">개발용 JWT 발급</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:11px;color:#888;">클릭하면 관리자 JWT가 자동 설정됩니다</p>
+          <button class="btn btn-send" onclick="callApi('GET', '/auth/dev-token', null, 'devtoken-res', false, function(d){if(d.token){document.getElementById('jwtToken').value=d.token;}})">Get Dev Token</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="devtoken-res-status"></div>
+          <div class="response-area" id="devtoken-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/auth/me</span>
+          <span class="desc">현재 사용자 정보</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:11px;color:#888;">JWT 토큰 필요 (위에서 설정)</p>
+          <button class="btn btn-send" onclick="callApi('GET', '/auth/me', null, 'authme-res', true)">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="authme-res-status"></div>
+          <div class="response-area" id="authme-res"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 문서 관리 -->
+  <div class="section">
+    <div class="section-title">문서 관리 (Documents)</div>
+    <div class="api-cards">
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="path">/upload</span>
+          <span class="desc">PDF 업로드 (관리자)</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>PDF 파일 선택</label>
+            <input type="file" id="upload-file" accept=".pdf" />
+          </div>
+          <button class="btn btn-send" onclick="uploadFile()">Upload</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="upload-res-status"></div>
+          <div class="response-area" id="upload-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/documents</span>
+          <span class="desc">문서 목록 조회</span>
+        </div>
+        <div class="card-body">
+          <button class="btn btn-send" onclick="callApi('GET', '/documents', null, 'docs-res')">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="docs-res-status"></div>
+          <div class="response-area" id="docs-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-delete">DELETE</span>
+          <span class="path">/documents/{filename}</span>
+          <span class="desc">문서 삭제 (관리자)</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>filename</label>
+            <input type="text" id="del-filename" placeholder="삭제할 파일명 (예: 학칙.pdf)" />
+          </div>
+          <button class="btn btn-send" onclick="callApi('DELETE', '/documents/' + encodeURIComponent(gv('del-filename')), null, 'deldoc-res', true)">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="deldoc-res-status"></div>
+          <div class="response-area" id="deldoc-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="path">/reset</span>
+          <span class="desc">전체 인덱스 초기화 (관리자)</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:11px;color:#e74c3c;">주의: 모든 인덱스가 삭제됩니다</p>
+          <button class="btn btn-send" onclick="callApi('POST', '/reset', null, 'reset-res', true)">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="reset-res-status"></div>
+          <div class="response-area" id="reset-res"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 채팅 -->
+  <div class="section">
+    <div class="section-title">채팅 (Chat - RAG)</div>
+    <div class="api-cards">
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="path">/</span>
+          <span class="desc">RAG 질의응답</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>message (질문)</label>
+            <input type="text" id="chat-msg" placeholder="졸업 요건이 뭐야?" value="졸업 요건이 뭐야?" />
+          </div>
+          <div class="field">
+            <label>history (이전 대화, 선택)</label>
+            <textarea id="chat-history" placeholder="이전 대화 내용 (비워도 됨)"></textarea>
+          </div>
+          <button class="btn btn-send" onclick="callApi('POST', '/', {message: gv('chat-msg'), history: gv('chat-history')}, 'chat-res', true)">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="chat-res-status"></div>
+          <div class="response-area" id="chat-res"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 공지사항 크롤링 -->
+  <div class="section">
+    <div class="section-title">공지사항 크롤링</div>
+    <div class="api-cards">
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="path">/crawl/notices</span>
+          <span class="desc">소융대 공지 크롤링 + PDF 변환</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>days (최근 N일, 기본 7일)</label>
+            <input type="number" id="crawl-days" value="7" min="1" max="30" />
+          </div>
+          <p style="font-size:11px;color:#888;">공지 본문을 PDF로 변환하고 첨부 PDF를 병합합니다. Gemini가 유효성을 판단하여 마감 지난 공지는 제외합니다. (관리자 JWT 필요)</p>
+          <button class="btn btn-send" onclick="callApi('POST', '/crawl/notices?days=' + gv('crawl-days'), null, 'crawl-res', true)">Crawl</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="crawl-res-status"></div>
+          <div class="response-area" id="crawl-res"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 기타 -->
+  <div class="section">
+    <div class="section-title">기타 API</div>
+    <div class="api-cards">
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/health</span>
+          <span class="desc">헬스체크</span>
+        </div>
+        <div class="card-body">
+          <button class="btn btn-send" onclick="callApi('GET', '/health', null, 'health-res')">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="health-res-status"></div>
+          <div class="response-area" id="health-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/stats</span>
+          <span class="desc">이용통계</span>
+        </div>
+        <div class="card-body">
+          <button class="btn btn-send" onclick="callApi('GET', '/stats', null, 'stats-res')">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="stats-res-status"></div>
+          <div class="response-area" id="stats-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/faq</span>
+          <span class="desc">FAQ 자동 생성</span>
+        </div>
+        <div class="card-body">
+          <button class="btn btn-send" onclick="callApi('GET', '/faq', null, 'faq-res')">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="faq-res-status"></div>
+          <div class="response-area" id="faq-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/profile</span>
+          <span class="desc">프로필 조회</span>
+        </div>
+        <div class="card-body">
+          <button class="btn btn-send" onclick="callApi('GET', '/profile', null, 'profile-res', true)">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="profile-res-status"></div>
+          <div class="response-area" id="profile-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="path">/profile</span>
+          <span class="desc">프로필 저장</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>JSON Body</label>
+            <textarea id="profile-body">{"name":"홍길동","studentId":"20210001","department":"소프트웨어학부","grade":"3"}</textarea>
+          </div>
+          <button class="btn btn-send" onclick="callApi('POST', '/profile', JSON.parse(gv('profile-body')), 'profilesave-res', true)">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="profilesave-res-status"></div>
+          <div class="response-area" id="profilesave-res"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="path">/crawl/notices/list</span>
+          <span class="desc">공지사항 목록</span>
+        </div>
+        <div class="card-body">
+          <button class="btn btn-send" onclick="callApi('GET', '/crawl/notices/list', null, 'notices-res')">Send</button>
+        </div>
+        <div class="card-footer">
+          <div class="status" id="notices-res-status"></div>
+          <div class="response-area" id="notices-res"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function gv(id) { return document.getElementById(id).value; }
+
+function handleGoogleCredential(response) {
+  document.getElementById('auth-credential').value = response.credential;
+  // 자동으로 /auth/google 호출
+  callApi('POST', '/auth/google', {credential: response.credential}, 'auth-res', false, function(d) {
+    if (d.token) { document.getElementById('jwtToken').value = d.token; }
+  });
+}
+
+async function callApi(method, path, body, resId, auth, callback) {
+  const base = document.getElementById('baseUrl').value;
+  const url = base + path;
+  const statusEl = document.getElementById(resId + '-status');
+  const resEl = document.getElementById(resId);
+
+  statusEl.className = 'status show';
+  statusEl.textContent = 'Loading...';
+  resEl.className = 'response-area';
+  resEl.textContent = '';
+
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (auth) {
+    const token = document.getElementById('jwtToken').value;
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+  }
+
+  try {
+    const opts = { method, headers };
+    if (body) opts.body = JSON.stringify(body);
+
+    const start = Date.now();
+    const resp = await fetch(url, opts);
+    const elapsed = Date.now() - start;
+
+    let data;
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.includes('json')) {
+      data = await resp.json();
+    } else {
+      data = await resp.text();
+    }
+
+    statusEl.className = 'status show ' + (resp.ok ? 'ok' : 'err');
+    statusEl.textContent = resp.status + ' ' + resp.statusText + ' (' + elapsed + 'ms)';
+
+    resEl.className = 'response-area show';
+    resEl.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+
+    if (callback && resp.ok && typeof data === 'object') callback(data);
+  } catch (e) {
+    statusEl.className = 'status show err';
+    statusEl.textContent = 'Error: ' + e.message;
+    resEl.className = 'response-area show';
+    resEl.textContent = e.stack || e.message;
+  }
+}
+
+async function uploadFile() {
+  const base = document.getElementById('baseUrl').value;
+  const fileInput = document.getElementById('upload-file');
+  const statusEl = document.getElementById('upload-res-status');
+  const resEl = document.getElementById('upload-res');
+
+  if (!fileInput.files.length) {
+    statusEl.className = 'status show err';
+    statusEl.textContent = '파일을 선택해주세요';
+    return;
+  }
+
+  statusEl.className = 'status show';
+  statusEl.textContent = 'Uploading...';
+  resEl.className = 'response-area';
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+
+  const headers = {};
+  const token = document.getElementById('jwtToken').value;
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+
+  try {
+    const start = Date.now();
+    const resp = await fetch(base + '/upload', { method: 'POST', headers, body: formData });
+    const elapsed = Date.now() - start;
+    const data = await resp.json();
+
+    statusEl.className = 'status show ' + (resp.ok ? 'ok' : 'err');
+    statusEl.textContent = resp.status + ' ' + resp.statusText + ' (' + elapsed + 'ms)';
+    resEl.className = 'response-area show';
+    resEl.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    statusEl.className = 'status show err';
+    statusEl.textContent = 'Error: ' + e.message;
+    resEl.className = 'response-area show';
+    resEl.textContent = e.stack || e.message;
+  }
+}
+</script>
+
+</body>
+</html>

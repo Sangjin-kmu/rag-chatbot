@@ -1,10 +1,10 @@
 """국민대 소프트웨어학부 공지사항 크롤러
-- https://cs.kookmin.ac.kr/news/notice/ 전체 270페이지 크롤링
-- 본문 텍스트 + 첨부파일(PDF 등) 자동 다운로드
+- https://cs.kookmin.ac.kr/news/notice/ 전체 크롤링
+- 본문 텍스트를 PDF로 변환 + 첨부파일(PDF)이 있으면 뒤에 병합
 - Playwright (헤드리스 브라우저) 사용
 
 사용법:
-  pip install playwright
+  pip install playwright fpdf2 PyPDF2
   playwright install chromium
   python scripts/crawl_notices.py
 """
@@ -12,30 +12,99 @@ import asyncio
 import os
 import re
 import json
-import time
+import tempfile
 from pathlib import Path
 
 try:
     from playwright.async_api import async_playwright
 except ImportError:
-    print("❌ playwright 설치 필요:")
-    print("   pip install playwright")
-    print("   playwright install chromium")
+    print("playwright 설치 필요: pip install playwright && playwright install chromium")
     exit(1)
+
+from fpdf import FPDF
+from PyPDF2 import PdfReader, PdfWriter
 
 # 설정
 BASE_URL = "https://cs.kookmin.ac.kr/news/notice/"
 OUTPUT_DIR = Path("crawled_notices")
-ATTACH_DIR = OUTPUT_DIR / "attachments"
-WAIT_MS = 2000  # 페이지 로딩 대기 (ms)
+PDF_DIR = OUTPUT_DIR / "pdf"
+TEMP_DIR = OUTPUT_DIR / "temp"
+WAIT_MS = 2000
+
+# 한글 폰트 경로 (macOS)
+FONT_PATH = "/System/Library/Fonts/Supplemental/AppleGothic.ttf"
+if not os.path.exists(FONT_PATH):
+    FONT_PATH = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
+
+
+class NoticePDF(FPDF):
+    """한글 지원 PDF 생성기"""
+    def __init__(self):
+        super().__init__()
+        self.add_font("Korean", "", FONT_PATH, uni=True)
+        self.set_auto_page_break(auto=True, margin=20)
+
+    def add_notice(self, title, date, author, url, content):
+        self.add_page()
+        # 제목
+        self.set_font("Korean", size=16)
+        self.multi_cell(0, 10, title)
+        self.ln(3)
+        # 메타 정보
+        self.set_font("Korean", size=9)
+        self.set_text_color(100, 100, 100)
+        if date:
+            self.cell(0, 5, f"날짜: {date}", new_x="LMARGIN", new_y="NEXT")
+        if author:
+            self.cell(0, 5, f"작성자: {author}", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 5, f"URL: {url}", new_x="LMARGIN", new_y="NEXT")
+        self.ln(5)
+        # 구분선
+        self.set_draw_color(200, 200, 200)
+        self.line(10, self.get_y(), 200, self.get_y())
+        self.ln(5)
+        # 본문
+        self.set_text_color(0, 0, 0)
+        self.set_font("Korean", size=10)
+        if content:
+            self.multi_cell(0, 6, content)
+        else:
+            self.cell(0, 6, "(본문 없음)")
+
+
+def create_notice_pdf(title, date, author, url, content, output_path):
+    """공지 본문을 PDF로 생성"""
+    pdf = NoticePDF()
+    pdf.add_notice(title, date, author, url, content)
+    pdf.output(str(output_path))
+
+
+def merge_pdfs(main_pdf_path, attachment_paths, output_path):
+    """본문 PDF + 첨부파일 PDF들을 하나로 병합"""
+    writer = PdfWriter()
+
+    # 본문 PDF 추가
+    reader = PdfReader(str(main_pdf_path))
+    for page in reader.pages:
+        writer.add_page(page)
+
+    # 첨부파일 PDF들 추가
+    for attach_path in attachment_paths:
+        try:
+            attach_reader = PdfReader(str(attach_path))
+            for page in attach_reader.pages:
+                writer.add_page(page)
+        except Exception as e:
+            print(f"    첨부파일 병합 실패 ({attach_path}): {e}")
+
+    with open(str(output_path), "wb") as f:
+        writer.write(f)
 
 
 async def get_total_pages(page) -> int:
-    """총 페이지 수 추출"""
-    # .pagenation-number 에서 "1/270" 형태
     el = await page.query_selector(".pagenation-number")
     if el:
-        text = await el.inner_text()  # "1/270"
+        text = await el.inner_text()
         parts = text.strip().split("/")
         if len(parts) == 2:
             return int(parts[1].strip())
@@ -43,60 +112,47 @@ async def get_total_pages(page) -> int:
 
 
 async def get_notice_list(page) -> list:
-    """현재 페이지의 공지 목록 추출"""
     notices = []
     rows = await page.query_selector_all(".list-tbody ul")
-
     for row in rows:
-        # 제목 + 링크
         subject_el = await row.query_selector("li.subject a")
         if not subject_el:
             continue
         href = await subject_el.get_attribute("href")
         title = (await subject_el.inner_text()).strip()
 
-        # 번호 (Notice 또는 숫자)
         num_el = await row.query_selector("li.notice strong, li.number")
         num = ""
         if num_el:
             num = (await num_el.inner_text()).strip()
 
-        # 글쓴이
         lis = await row.query_selector_all("li")
         author = ""
-        date = ""
         if len(lis) >= 4:
             author = (await lis[2].inner_text()).strip()
-        # 날짜
+
+        date = ""
         date_el = await row.query_selector("li.date")
         if date_el:
             date = (await date_el.inner_text()).strip()
         elif len(lis) >= 5:
             date = (await lis[3].inner_text()).strip()
 
-        # 첨부파일 여부
         has_attach = await row.query_selector("img[alt='file']")
 
         if href and title:
             full_url = f"https://cs.kookmin.ac.kr/news/notice/{href.replace('./', '')}"
             notices.append({
-                "num": num,
-                "title": title,
-                "url": full_url,
-                "author": author,
-                "date": date,
-                "has_attach": bool(has_attach)
+                "num": num, "title": title, "url": full_url,
+                "author": author, "date": date, "has_attach": bool(has_attach)
             })
-
     return notices
 
 
 async def get_notice_detail(page, url: str) -> dict:
-    """공지 상세 페이지에서 본문 + 첨부파일 URL 추출"""
     await page.goto(url, wait_until="networkidle", timeout=30000)
     await page.wait_for_timeout(WAIT_MS)
 
-    # 제목
     title = ""
     for sel in [".board-view-title", ".view-title", "h2", ".subject-title"]:
         el = await page.query_selector(sel)
@@ -107,7 +163,6 @@ async def get_notice_detail(page, url: str) -> dict:
     if not title:
         title = (await page.title()).strip()
 
-    # 본문
     content = ""
     for sel in [".board-view-content", ".view-content", ".content-view",
                 ".board-content", ".view-body"]:
@@ -116,25 +171,21 @@ async def get_notice_detail(page, url: str) -> dict:
             content = (await el.inner_text()).strip()
             if content:
                 break
-    # 본문 못 찾으면 전체 content 영역에서 시도
     if not content:
         el = await page.query_selector(".content")
         if el:
             content = (await el.inner_text()).strip()
 
-    # 날짜, 글쓴이 등 메타 정보
     meta = {}
     meta_els = await page.query_selector_all(".view-info li, .board-view-info li, .info-item")
     for mel in meta_els:
         text = (await mel.inner_text()).strip()
-        if "작성일" in text or "날짜" in text or "등록일" in text:
+        if any(k in text for k in ["작성일", "날짜", "등록일"]):
             meta["date"] = text.split(":")[-1].strip() if ":" in text else text
-        elif "글쓴이" in text or "작성자" in text:
+        elif any(k in text for k in ["글쓴이", "작성자"]):
             meta["author"] = text.split(":")[-1].strip() if ":" in text else text
 
-    # 첨부파일 링크 수집
     attachments = []
-    # 방법1: 일반적인 첨부파일 영역
     attach_links = await page.query_selector_all(
         ".board-view-file a, .view-file a, .file-list a, "
         ".attach a, a[href*='download'], a[href*='/file/']"
@@ -146,7 +197,6 @@ async def get_notice_detail(page, url: str) -> dict:
             full_url = href if href.startswith("http") else f"https://cs.kookmin.ac.kr{href}"
             attachments.append({"name": name, "url": full_url})
 
-    # 방법2: 직접 파일 확장자 링크
     if not attachments:
         all_links = await page.query_selector_all("a[href]")
         for link in all_links:
@@ -162,24 +212,20 @@ async def get_notice_detail(page, url: str) -> dict:
                 attachments.append({"name": name, "url": full_url})
 
     return {
-        "title": title,
-        "url": url,
-        "content": content,
-        "meta": meta,
-        "attachments": attachments
+        "title": title, "url": url, "content": content,
+        "meta": meta, "attachments": attachments
     }
 
 
-async def download_file(context, url: str, filename: str) -> str:
+async def download_file(context, url: str, filename: str, dest_dir: Path) -> str:
     """첨부파일 다운로드"""
-    ATTACH_DIR.mkdir(parents=True, exist_ok=True)
+    dest_dir.mkdir(parents=True, exist_ok=True)
     safe_name = re.sub(r'[\\/*?:"<>|]', '_', filename).strip()
     if not safe_name:
         safe_name = url.split("/")[-1].split("?")[0] or "file"
 
-    filepath = ATTACH_DIR / safe_name
+    filepath = dest_dir / safe_name
     if filepath.exists():
-        print(f"    ⏭️  이미 존재: {safe_name}")
         return str(filepath)
 
     try:
@@ -188,18 +234,19 @@ async def download_file(context, url: str, filename: str) -> str:
             body = await resp.body()
             filepath.write_bytes(body)
             size_kb = len(body) / 1024
-            print(f"    📎 다운로드: {safe_name} ({size_kb:.1f}KB)")
+            print(f"    다운로드: {safe_name} ({size_kb:.1f}KB)")
             return str(filepath)
         else:
-            print(f"    ❌ HTTP {resp.status}: {safe_name}")
+            print(f"    HTTP {resp.status}: {safe_name}")
     except Exception as e:
-        print(f"    ❌ 다운로드 실패: {safe_name} - {e}")
+        print(f"    다운로드 실패: {safe_name} - {e}")
     return ""
 
 
 async def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    ATTACH_DIR.mkdir(parents=True, exist_ok=True)
+    PDF_DIR.mkdir(parents=True, exist_ok=True)
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -209,9 +256,7 @@ async def main():
         )
         page = await context.new_page()
 
-        # ============================================================
-        # 1단계: 전체 공지 목록 수집
-        # ============================================================
+        # 1단계: 공지 목록 수집
         print("=" * 60)
         print("1단계: 공지 목록 수집")
         print("=" * 60)
@@ -222,22 +267,20 @@ async def main():
         total_pages = await get_total_pages(page)
         print(f"총 {total_pages} 페이지 발견")
 
-        # 테스트: 첫 페이지만 (전체 크롤링 시 range(total_pages)로 변경)
-        TEST_PAGES = 1
+        # 크롤링할 페이지 수 (전체: total_pages, 테스트: 1)
+        CRAWL_PAGES = 1
 
         all_notices = []
-        for pn in range(TEST_PAGES):
+        for pn in range(CRAWL_PAGES):
             url = f"{BASE_URL}?&pn={pn}"
             await page.goto(url, wait_until="networkidle", timeout=30000)
             await page.wait_for_timeout(WAIT_MS)
-
             notices = await get_notice_list(page)
             all_notices.extend(notices)
-
             if (pn + 1) % 10 == 0 or pn == 0:
-                print(f"  페이지 {pn+1}/{total_pages} — 누적 {len(all_notices)}개")
+                print(f"  페이지 {pn+1}/{CRAWL_PAGES} - 누적 {len(all_notices)}개")
 
-        # 중복 제거 (URL 기준)
+        # 중복 제거
         seen = set()
         unique = []
         for n in all_notices:
@@ -245,19 +288,11 @@ async def main():
                 seen.add(n["url"])
                 unique.append(n)
 
-        print(f"\n📄 총 {len(unique)}개 고유 공지 수집 완료")
+        print(f"\n총 {len(unique)}개 고유 공지 수집 완료")
 
-        # 목록 저장
-        list_path = OUTPUT_DIR / "notice_list.json"
-        with open(list_path, "w", encoding="utf-8") as f:
-            json.dump(unique, f, ensure_ascii=False, indent=2)
-        print(f"  목록 저장: {list_path}")
-
-        # ============================================================
-        # 2단계: 각 공지 상세 크롤링 + 첨부파일 다운로드
-        # ============================================================
+        # 2단계: 상세 크롤링 + PDF 변환
         print(f"\n{'=' * 60}")
-        print("2단계: 상세 페이지 크롤링 + 첨부파일 다운로드")
+        print("2단계: 상세 크롤링 + PDF 변환")
         print("=" * 60)
 
         results = []
@@ -268,56 +303,65 @@ async def main():
 
             try:
                 detail = await get_notice_detail(page, notice["url"])
-                # 목록에서 가져온 메타 정보 병합
                 detail["num"] = notice.get("num", "")
                 detail["author"] = notice.get("author", "") or detail.get("meta", {}).get("author", "")
                 detail["date"] = notice.get("date", "") or detail.get("meta", {}).get("date", "")
-                detail["has_attach"] = notice.get("has_attach", False)
 
-                # 첨부파일 다운로드
+                # 파일명 생성
+                safe_title = re.sub(r'[\\/*?:"<>|]', '_', detail["title"])[:80].strip()
+                pdf_filename = f"{safe_title}.pdf"
+
+                # 본문 PDF 생성
+                body_pdf_path = TEMP_DIR / f"body_{i}.pdf"
+                create_notice_pdf(
+                    detail["title"], detail["date"], detail["author"],
+                    detail["url"], detail.get("content", ""),
+                    body_pdf_path
+                )
+
+                # 첨부파일 다운로드 (PDF만 병합 대상)
+                pdf_attachments = []
                 for attach in detail.get("attachments", []):
-                    local = await download_file(context, attach["url"], attach["name"])
+                    local = await download_file(context, attach["url"], attach["name"], TEMP_DIR)
                     attach["local_path"] = local
+                    if local and local.lower().endswith(".pdf"):
+                        pdf_attachments.append(local)
 
+                # 최종 PDF 생성 (본문 + 첨부 PDF 병합)
+                final_pdf_path = PDF_DIR / pdf_filename
+                if pdf_attachments:
+                    print(f"    PDF 병합: 본문 + 첨부 {len(pdf_attachments)}개")
+                    merge_pdfs(body_pdf_path, pdf_attachments, final_pdf_path)
+                else:
+                    # 첨부 PDF 없으면 본문 PDF만 복사
+                    import shutil
+                    shutil.copy2(str(body_pdf_path), str(final_pdf_path))
+
+                detail["pdf_path"] = str(final_pdf_path)
                 results.append(detail)
-
-                # 본문 텍스트 파일 저장
-                safe_title = re.sub(r'[\\/*?:"<>|]', '_', detail["title"])[:80]
-                txt_path = OUTPUT_DIR / f"{i+1:04d}_{safe_title}.txt"
-                with open(txt_path, "w", encoding="utf-8") as f:
-                    f.write(f"제목: {detail['title']}\n")
-                    f.write(f"번호: {detail['num']}\n")
-                    f.write(f"글쓴이: {detail['author']}\n")
-                    f.write(f"날짜: {detail['date']}\n")
-                    f.write(f"URL: {detail['url']}\n")
-                    if detail["attachments"]:
-                        f.write(f"첨부파일: {len(detail['attachments'])}개\n")
-                        for a in detail["attachments"]:
-                            f.write(f"  - {a['name']}\n")
-                    f.write(f"\n{'=' * 60}\n\n")
-                    f.write(detail.get("content", "(본문 없음)"))
+                print(f"    PDF 저장: {pdf_filename}")
 
             except Exception as e:
-                print(f"  ❌ 실패: {e}")
+                print(f"    실패: {e}")
 
-            # 서버 부하 방지
             await page.wait_for_timeout(500)
 
         await browser.close()
 
-    # 전체 결과 JSON 저장
+    # 임시 파일 정리
+    import shutil
+    if TEMP_DIR.exists():
+        shutil.rmtree(TEMP_DIR)
+
+    # 결과 JSON 저장
     json_path = OUTPUT_DIR / "notices_full.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
-    # 통계
-    attach_count = sum(len(r.get("attachments", [])) for r in results)
     print(f"\n{'=' * 60}")
-    print(f"🎉 크롤링 완료!")
+    print(f"크롤링 완료!")
     print(f"  공지: {len(results)}개")
-    print(f"  첨부파일: {attach_count}개")
-    print(f"  텍스트 저장: {OUTPUT_DIR}/")
-    print(f"  첨부파일 저장: {ATTACH_DIR}/")
+    print(f"  PDF 저장: {PDF_DIR}/")
     print(f"  전체 데이터: {json_path}")
     print("=" * 60)
 

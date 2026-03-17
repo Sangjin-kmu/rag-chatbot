@@ -61,4 +61,19 @@ public class AuthController {
                 "email", email, "name", claims.getOrDefault("name", ""), "isDocAdmin", isAdmin
         )));
     }
+
+    // 테스트용 JWT 발급 (개발 환경 전용)
+    @GetMapping("/auth/dev-token")
+    public ResponseEntity<?> devToken(@RequestParam(defaultValue = "22615jin@kookmin.ac.kr") String email,
+                                       @RequestParam(defaultValue = "테스트유저") String name) {
+        String token = jwtService.createToken(email, name);
+        boolean isAdmin = appConfig.getAdminEmailList().contains(email);
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "email", email,
+                "name", name,
+                "isDocAdmin", isAdmin
+        ));
+    }
+
 }

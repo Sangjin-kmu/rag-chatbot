@@ -4,6 +4,7 @@ import com.kdd.config.AppConfig;
 import com.kdd.repository.DocumentChunkRepository;
 import com.kdd.security.JwtService;
 import com.kdd.service.ChunkerService;
+import com.kdd.service.NoticeCrawlerService;
 import com.kdd.service.PdfParserService;
 import com.kdd.service.SearchService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class DocumentController {
     private final PdfParserService pdfParser;
     private final ChunkerService chunkerService;
     private final DocumentChunkRepository chunkRepo;
+    private final NoticeCrawlerService noticeCrawler;
 
     private void requireAdmin(String auth) {
         String email = jwtService.extractEmail(auth);
@@ -154,4 +156,23 @@ public class DocumentController {
         }
         return ResponseEntity.ok(Map.of("notices", notices));
     }
+
+    @PostMapping("/crawl/notices")
+    public ResponseEntity<?> crawlNotices(
+            @RequestParam(defaultValue = "7") int days,
+            @RequestHeader("Authorization") String auth) {
+        try {
+            requireAdmin(auth);
+        } catch (Exception e) {
+            return ResponseEntity.status(403).body(Map.of("detail", "Admin access required"));
+        }
+        try {
+            Map<String, Object> result = noticeCrawler.crawlRecentNotices(days);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
+            return ResponseEntity.status(500).body(Map.of("detail", msg));
+        }
+    }
+
 }

@@ -17,11 +17,13 @@ public interface ChatLogRepository extends JpaRepository<ChatLog, Long> {
            "WHERE c.createdAt >= :since GROUP BY c.question ORDER BY cnt DESC")
     List<Object[]> findFrequentQuestions(@Param("since") LocalDateTime since);
 
-    @Query("SELECT FUNCTION('date', c.createdAt) as d, COUNT(c) FROM ChatLog c " +
-           "WHERE c.createdAt >= :since GROUP BY d ORDER BY d")
+    @Query(value = "SELECT date(created_at) as d, COUNT(*) FROM chat_logs " +
+           "WHERE created_at >= :since GROUP BY d ORDER BY d",
+           nativeQuery = true)
     List<Object[]> findDailyStats(@Param("since") LocalDateTime since);
 
-    @Query("SELECT FUNCTION('strftime', '%H', c.createdAt) as h, COUNT(c) FROM ChatLog c GROUP BY h ORDER BY h")
+    @Query(value = "SELECT strftime('%H', created_at) as h, COUNT(*) FROM chat_logs GROUP BY h ORDER BY h",
+           nativeQuery = true)
     List<Object[]> findHourlyStats();
 
     @Query("SELECT c.sources FROM ChatLog c WHERE c.createdAt >= :since AND c.sources IS NOT NULL")

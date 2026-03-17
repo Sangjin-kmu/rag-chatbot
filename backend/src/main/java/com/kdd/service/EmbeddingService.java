@@ -22,7 +22,7 @@ public class EmbeddingService {
      * Gemini embedding-001로 임베딩 생성 (3072차원)
      */
     public List<Double> getEmbedding(String text) {
-        String url = "https://generativelanguage.googleapis.com/v1/models/gemini-embedding-001:embedContent?key="
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key="
                 + appConfig.getGeminiApiKey();
 
         Map<String, Object> body = Map.of("content", Map.of("parts", List.of(Map.of("text", text))));

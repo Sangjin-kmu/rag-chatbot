@@ -1,5 +1,6 @@
 package com.kdd.service;
 
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
@@ -15,7 +16,7 @@ public class PdfParserService {
     public List<Map<String, Object>> parse(String filePath, String docName) {
         List<Map<String, Object>> chunks = new ArrayList<>();
 
-        try (PDDocument doc = PDDocument.load(new File(filePath))) {
+        try (PDDocument doc = Loader.loadPDF(new File(filePath))) {
             int totalPages = doc.getNumberOfPages();
             PDFTextStripper stripper = new PDFTextStripper();
 

@@ -38,3 +38,10 @@ Thumbs.db
 # 임시 파일
 *.tmp
 *.bak
+
+# 크롤링 PDF
+backend/crawled_notices/pdf/
+
+# 큰 바이너리 (별도 관리)
+*.ttf
+*.pdf

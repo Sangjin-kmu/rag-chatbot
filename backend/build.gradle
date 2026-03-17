@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.2.3'
-    id 'io.spring.dependency-management' version '1.1.4'
+    id 'org.springframework.boot' version '3.4.3'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.kdd'
@@ -24,7 +24,7 @@ dependencies {
 
     // DB
     implementation 'org.xerial:sqlite-jdbc:3.45.1.0'
-    implementation 'org.hibernate.orm:hibernate-community-dialects:6.4.4.Final'
+    implementation 'org.hibernate.orm:hibernate-community-dialects:6.6.5.Final'
 
     // Qdrant
     implementation 'io.qdrant:client:1.7.2'
@@ -46,8 +46,14 @@ dependencies {
     // HTML 파싱
     implementation 'org.jsoup:jsoup:1.17.2'
 
+    // 헤드리스 브라우저 (JS 렌더링 필요한 SPA 크롤링)
+    implementation 'com.microsoft.playwright:playwright:1.49.0'
+
     // JSON
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // .env 파일 로딩
+    implementation 'me.paulschwarz:spring-dotenv:4.0.0'
 
     // Scheduling
     implementation 'org.springframework.boot:spring-boot-starter-quartz'
